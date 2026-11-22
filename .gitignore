@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------------------
+# Books, audio and other user content - never commit copyrighted material
+# ---------------------------------------------------------------------------
+*.epub
+*.mobi
+*.azw
+*.azw3
+*.kfx
+*.fb2
+*.pdf
+*.djvu
+*.cbz
+*.cbr
+
+*.mp3
+*.m4a
+*.m4b
+*.aac
+*.wav
+*.flac
+*.ogg
+*.opus
+*.wma
+
+# Cover art and TTS models
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.onnx
+*.onnx.json
+
+# Tool output and scratch space
+.work/
+work/
+voice-samples/
+samples/
+output/
+*.part
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local legacy scripts
+_legacy/

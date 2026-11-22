@@ -1,0 +1,162 @@
+# epub2audiobook
+
+[![CI](https://github.com/filipbiernat/epub2audiobook/actions/workflows/ci.yml/badge.svg)](https://github.com/filipbiernat/epub2audiobook/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+
+Turn EPUB e-books into audiobooks with natural-sounding neural voices.
+**epub2audiobook** reads the book's chapters, synthesises them with
+[Microsoft Edge text-to-speech](https://github.com/rany2/edge-tts) and produces:
+
+- one tagged **MP3 per chapter** (title, author, track number, cover art), and
+- a single **M4B audiobook** with chapter markers and embedded cover, ready for
+  Apple Books, Smart AudioBook Player, BookPlayer, Plex/Audiobookshelf and others.
+
+## Features
+
+- Works with any standard EPUB 2/3 – chapters follow the spine (reading order),
+  titles come from headings or the table of contents.
+- Picks a default voice from the book's language (400+ voices, 100+ languages).
+- Smart text chunking at sentence boundaries, natural pauses between parts.
+- Parallel synthesis with automatic retries; **interrupted runs resume** where they
+  stopped.
+- EBU R128 loudness normalisation for consistent volume.
+- Voice comparison mode to pick the voice you like before converting a whole book.
+- No API key needed.
+
+## Requirements
+
+- Python 3.10+
+- [FFmpeg](https://ffmpeg.org/download.html) (`ffmpeg` and `ffprobe` on `PATH`)
+  - Windows: `winget install Gyan.FFmpeg`
+  - macOS: `brew install ffmpeg`
+  - Debian/Ubuntu: `sudo apt install ffmpeg`
+- An internet connection (speech is synthesised by Microsoft's online service)
+
+## Installation
+
+```bash
+pipx install git+https://github.com/filipbiernat/epub2audiobook.git
+```
+
+or with plain pip:
+
+```bash
+pip install git+https://github.com/filipbiernat/epub2audiobook.git
+```
+
+## Usage
+
+```bash
+# 1. Inspect the book: metadata, detected chapters and their sizes
+epub2audiobook info book.epub
+
+# 2. (Optional) compare voices on a short excerpt
+epub2audiobook sample book.epub                       # all voices for the book's language
+epub2audiobook sample book.epub --voice pl-PL-MarekNeural --voice pl-PL-ZofiaNeural
+
+# 3. Try a couple of chapters first ...
+epub2audiobook convert book.epub --only 1-2
+
+# 4. ... then convert the whole book (already finished chapters are skipped)
+epub2audiobook convert book.epub --voice pl-PL-MarekNeural --rate +10%
+```
+
+The result lands in `./<Author> - <Title>/`:
+
+```text
+Tom Clancy - Bez skrupułów/
+├── 01 - Strona tytułowa.mp3
+├── 02 - Prolog - Punkty styku.mp3
+├── 03 - Rozdział 1 - Sierotka.mp3
+├── ...
+└── Tom Clancy - Bez skrupułów.m4b
+```
+
+When `--only` is used, the M4B contains just the selected chapters and is named
+`... (excerpt).m4b`.
+
+### Commands
+
+| Command   | Description                                                        |
+| --------- | ------------------------------------------------------------------ |
+| `info`    | Show book metadata, the default voice and the chapter list.        |
+| `convert` | Synthesise chapters to MP3 and package them as M4B.                |
+| `m4b`     | (Re)build the M4B from already synthesised chapter MP3s.           |
+| `voices`  | List available voices, e.g. `epub2audiobook voices pl`.            |
+| `sample`  | Read a short excerpt with several voices to compare them.          |
+
+### Common options
+
+| Option                  | Default                 | Description                                                   |
+| ----------------------- | ----------------------- | ------------------------------------------------------------- |
+| `-o, --output DIR`      | `./<Author> - <Title>`  | Output directory.                                             |
+| `--only LIST`           | all                     | Chapters to process, e.g. `1,3-5` (numbers from `info`).      |
+| `--voice NAME`          | by book language        | Voice short name from `voices`.                               |
+| `--rate PCT`            | `+0%`                   | Speaking rate, e.g. `-10%`, `+20%`.                           |
+| `--bitrate RATE`        | `64k`                   | Audio bitrate of MP3 and M4B.                                 |
+| `--cover IMAGE`         | from EPUB               | Override the cover (`.jpg`/`.png`).                           |
+| `--parallel N`          | `3`                     | Concurrent TTS requests.                                      |
+| `--chunk-chars N`       | `2500`                  | Maximum characters per TTS request.                           |
+| `--no-normalize`        | –                       | Skip loudness normalisation.                                  |
+| `--no-m4b`              | –                       | Produce chapter MP3s only.                                    |
+| `--keep-work`           | –                       | Keep intermediate files in `<output>/.work`.                  |
+| `--heading-pattern RE`  | built-in                | Regex splitting headings like `Chapter 1 Title` (see below).  |
+
+Run `epub2audiobook <command> --help` for the full list.
+
+### Chapter titles
+
+Titles are taken from the first heading of each document, falling back to the
+table of contents. Single-line headings such as `Chapter 1 The Beginning` or
+`Rozdział 1 Sierotka` are split into `Chapter 1 - The Beginning` (file names, M4B
+chapters) and read aloud as *"Chapter 1. The Beginning."*. The built-in pattern
+understands common English, Polish, German, French, Spanish and Italian chapter
+words; pass your own regex with two groups (label, subtitle) via
+`--heading-pattern`, or `--heading-pattern ""` to disable splitting.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[EPUB] -->|spine, TOC, metadata| B[Chapters]
+    B -->|sentence-aware chunks| C[Edge TTS]
+    C -->|parallel MP3 parts| D[ffmpeg concat + loudnorm]
+    D -->|ID3 tags + cover| E[Chapter MP3s]
+    E -->|chapter markers| F[M4B]
+```
+
+| Module                     | Responsibility                                      |
+| -------------------------- | --------------------------------------------------- |
+| `epub2audiobook.epub`      | EPUB parsing (metadata, cover, chapters, TOC).      |
+| `epub2audiobook.text`      | Text normalisation, chunking, titles, file names.   |
+| `epub2audiobook.tts`       | Edge TTS synthesis with retries and voice listing.  |
+| `epub2audiobook.audio`     | FFmpeg wrappers: concat, silence, M4B packaging.    |
+| `epub2audiobook.tagging`   | ID3 tags for chapter MP3s.                          |
+| `epub2audiobook.pipeline`  | Orchestration of the whole conversion.              |
+| `epub2audiobook.cli`       | Command-line interface.                             |
+
+## Development
+
+```bash
+git clone https://github.com/filipbiernat/epub2audiobook.git
+cd epub2audiobook
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+
+pytest              # tests run offline against generated EPUB fixtures
+ruff check .        # lint
+ruff format .       # format
+```
+
+## Disclaimer
+
+- Edge TTS uses Microsoft's online speech service through the unofficial
+  [`edge-tts`](https://github.com/rany2/edge-tts) library. It is not affiliated with
+  or endorsed by Microsoft and may change or stop working at any time.
+- Convert only books you have the right to use, e.g. DRM-free books you own, for
+  personal use. Do not distribute generated audiobooks of copyrighted works.
+
+## License
+
+[MIT](LICENSE) © Filip Biernat
