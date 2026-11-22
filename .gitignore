@@ -37,6 +37,7 @@ voice-samples/
 samples/
 output/
 *.part
+bookvoice.log
 
 # ---------------------------------------------------------------------------
 # Python

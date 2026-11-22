@@ -56,3 +56,36 @@ def test_cli_reports_errors(tmp_path: Path) -> None:
 def test_cli_rejects_bad_selection(sample_epub: Path) -> None:
     with pytest.raises(SystemExit):
         cli.main(["convert", str(sample_epub), "--only", "x"])
+
+
+def test_cli_convert_background(
+    sample_epub: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out_dir = tmp_path / "out"
+    launched: list[tuple[list[str], dict[str, object]]] = []
+
+    class FakePopen:
+        pid = 4242
+
+        def __init__(self, cmd: list[str], **kwargs: object) -> None:
+            launched.append((cmd, kwargs))
+
+    monkeypatch.setattr("bookvoice.audio.require_ffmpeg", lambda: None)
+    monkeypatch.setattr("bookvoice.cli.subprocess.Popen", FakePopen)
+
+    rc = cli.main(["convert", str(sample_epub), "-o", str(out_dir), "--background", "--only", "1"])
+    assert rc == 0
+    assert len(launched) == 1
+    cmd, kwargs = launched[0]
+    assert cmd[:3] == [cli.sys.executable, "-m", "bookvoice"]
+    assert "--background" not in cmd
+    assert "--only" in cmd
+    assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"  # type: ignore[index]
+    assert kwargs["env"]["PYTHONUNBUFFERED"] == "1"  # type: ignore[index]
+    assert (out_dir / "bookvoice.log").exists()
+    out = capsys.readouterr().out
+    assert "PID 4242" in out
+    assert "bookvoice.log" in out

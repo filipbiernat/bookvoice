@@ -53,7 +53,11 @@ Ask the user to confirm or customize the following options (batch them into one 
    - **Full book** (all chapters)
    - **Skip front-matter** (e.g. `--only 2-<N>` if chapter 1 is a copyright/title page)
    - **Pilot / test run first** (e.g. `--only 1-2` or `--only 2-3`)
-4. **Audio settings** (present defaults, let user override if desired):
+4. **Execution mode** *(for full books or > 2 chapters — never block the chat with a long-running task)*:
+   - **Separate terminal window** *(recommended on desktop)*: opens a new console window showing live chapter progress and stays open on completion; the chat is immediately free.
+   - **Silent background (`--background`)**: runs detached with logs in `<output>/bookvoice.log`, returns PID immediately; works on all platforms and headless environments.
+   - **Wait in chat**: only for short pilots (e.g. `--only 1-2`).
+5. **Audio settings** (present defaults, let user override if desired):
    - **Speaking rate**: `+0%` (normal), or e.g. `-10%`, `+10%`, `+15%` (`--rate`)
    - **Bitrate**: `64k` (good speech quality & compact size), or `96k` / `128k` (`--bitrate`)
    - **Loudness normalisation**: enabled by default (EBU R128), or `--no-normalize`
@@ -69,25 +73,32 @@ bookvoice sample "<book_path>" --chars 900 -o voice-samples
 Tell the user where the sample `.mp3` files are saved so they can listen and choose their preferred voice before proceeding to Step 5.
 
 ### 5. Run the Conversion
-Construct and run the `convert` command based on the user's answers, e.g.:
-```bash
-bookvoice convert "<book_path>" \
-  --voice <voice> \
-  --rate <rate> \
-  --bitrate <bitrate> \
-  [--only <selection>] \
-  [--no-m4b] \
-  [--no-normalize] \
-  [-o "<output_dir>"] \
-  [--cover "<cover_path>"]
+
+Base arguments:
+```text
+convert "<book_path>" --voice <voice> --rate <rate> --bitrate <bitrate> [--only <selection>] [--no-m4b] [--no-normalize] [-o "<output_dir>"] [--cover "<cover_path>"]
 ```
 
-- On Windows PowerShell, set `$env:PYTHONIOENCODING='utf-8'` so non-ASCII chapter titles print cleanly.
-- For full books, run the conversion in the background and inform the user of the expected duration and output directory.
-- Remind the user that **interrupted runs resume automatically** — running the exact same command skips already-finished chapters.
+Choose the launch mode based on the user's preference (for full books, **always** use fire-and-forget so no persistent background task blocks the chat):
+
+- **Separate terminal window (Windows PowerShell):**
+  ```powershell
+  Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:PYTHONIOENCODING='utf-8'; & '<bookvoice_exe>' convert '<book_path>' ..."
+  ```
+- **Separate terminal window (macOS):**
+  ```bash
+  osascript -e 'tell application "Terminal" to do script "bookvoice convert \"<book_path>\" ..."'
+  ```
+- **Silent background (Windows / macOS / Linux):**
+  ```bash
+  bookvoice convert "<book_path>" ... --background
+  ```
+  Prints the PID, output directory, and `<output>/bookvoice.log` path, then exits immediately.
+- **Short pilot (wait in chat):**
+  Run `bookvoice convert ...` directly (on Windows PowerShell, set `$env:PYTHONIOENCODING='utf-8'`).
+
+Remind the user that **interrupted runs resume automatically** — running the exact same command skips already-finished chapters.
 
 ### 6. Verify Output
-Once conversion completes:
-- Check the output directory for all expected `.mp3` files and (unless `--no-m4b`) the `.m4b` file.
-- Verify the `.m4b` duration and chapter count with `ffprobe` if available.
-- Report the output path, file size, chapter count, and total duration to the user.
+- For short synchronous runs: inspect the output directory, verify the `.m4b` duration and chapter count with `ffprobe`, and report the result.
+- For fire-and-forget runs: report the launch details (window / PID, output directory, log path) and end the turn cleanly. When the user later asks for status, check the tail of `<output>/bookvoice.log` or count `.mp3` files in `<output>`.

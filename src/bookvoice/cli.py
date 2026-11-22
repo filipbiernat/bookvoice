@@ -6,7 +6,9 @@ import argparse
 import asyncio
 import dataclasses
 import logging
+import os
 import re
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -111,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-normalize", action="store_true", help="skip EBU R128 loudness normalisation"
     )
     convert.add_argument("--no-m4b", action="store_true", help="only produce chapter MP3s")
+    convert.add_argument(
+        "--background",
+        action="store_true",
+        help="run detached in the background and write logs to '<output>/bookvoice.log'",
+    )
     convert.set_defaults(handler=cmd_convert)
 
     m4b = commands.add_parser(
@@ -212,11 +219,41 @@ def cmd_info(args: argparse.Namespace) -> None:
         print(f"{chapter.index:>{width}}  {chapter.char_count:>8,}  {chapter.title}")
 
 
+def _spawn_background(argv: Sequence[str], out_dir: Path) -> tuple[int, Path]:
+    """Re-launch ``bookvoice`` detached from the terminal, logging to ``<out_dir>/bookvoice.log``."""
+    child_args = [arg for arg in argv if arg != "--background"]
+    cmd = [sys.executable, "-m", "bookvoice", *child_args]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log_path = out_dir / "bookvoice.log"
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stderr": subprocess.STDOUT,
+        "env": env,
+        "close_fds": True,
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+    else:
+        kwargs["start_new_session"] = True
+    with log_path.open("wb") as log_file:
+        proc = subprocess.Popen(cmd, stdout=log_file, **kwargs)  # type: ignore[call-overload]
+    return proc.pid, log_path
+
+
 def cmd_convert(args: argparse.Namespace) -> None:
     audio.require_ffmpeg()
     book = _load_book(args)
     chapters = book.select(args.only)
     out_dir = _output_dir(args, book)
+    if args.background:
+        pid, log_path = _spawn_background(args._argv, out_dir)
+        print(f"Started in background (PID {pid}).")
+        print(f"Output: {out_dir}")
+        print(f"Log:    {log_path}")
+        return
     opts = pipeline.ConvertOptions(
         voice=args.voice or tts.default_voice(book.language),
         rate=args.rate,
@@ -298,7 +335,9 @@ def cmd_mobi2epub(args: argparse.Namespace) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    args = build_parser().parse_args(raw_argv)
+    args._argv = raw_argv
     level = logging.WARNING if args.quiet else logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=level, format="%(message)s")
     if not args.verbose:

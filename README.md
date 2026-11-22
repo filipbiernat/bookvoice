@@ -114,6 +114,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `--chunk-chars N`       | `2500`                  | Maximum characters per TTS request.                           |
 | `--no-normalize`        | –                       | Skip loudness normalisation.                                  |
 | `--no-m4b`              | –                       | Produce chapter MP3s only.                                    |
+| `--background`          | –                       | Run detached in the background, logging to `bookvoice.log`.   |
 | `--keep-work`           | –                       | Keep intermediate files in `<output>/.work`.                  |
 | `--heading-pattern RE`  | built-in                | Regex splitting headings like `Chapter 1 Title` (see below).  |
 
