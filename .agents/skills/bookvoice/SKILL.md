@@ -1,37 +1,37 @@
 ---
-name: epub2audiobook
+name: bookvoice
 description: >-
   Interactive guided workflow for converting EPUB, MOBI, AZW, or AZW3 e-books into
-  chaptered audiobooks (MP3 and/or M4B) using the epub2audiobook CLI. Activate this
+  chaptered audiobooks (MP3 and/or M4B) using the bookvoice CLI. Activate this
   skill whenever the user wants to generate an audiobook from an e-book, compare TTS
   voices, or convert MOBI to EPUB for audiobook generation.
 ---
 
-# Audiobook Generation Assistant (`epub2audiobook`)
+# Audiobook Generation Assistant (`bookvoice`)
 
 Guide the user interactively through converting an e-book into a high-quality
-audiobook using `epub2audiobook`. Converse in the user's language and ask clear,
+audiobook using `bookvoice`. Converse in the user's language and ask clear,
 concise questions with sensible defaults before starting long conversions.
 
 ## Prerequisites Check
 
-Before running commands, locate the `epub2audiobook` executable:
-- Check if `epub2audiobook` is on `PATH`, or in a local `.venv` (e.g. `.venv/Scripts/epub2audiobook` on Windows or `.venv/bin/epub2audiobook` on macOS/Linux).
+Before running commands, locate the `bookvoice` executable:
+- Check if `bookvoice` is on `PATH`, or in a local `.venv` (e.g. `.venv/Scripts/bookvoice` on Windows or `.venv/bin/bookvoice` on macOS/Linux).
 - Verify `ffmpeg` and `ffprobe` are available on `PATH`.
-- If the source book is `.mobi`, `.azw`, `.azw3`, or `.prc`, verify Calibre's `ebook-convert` is installed (`epub2audiobook` invokes it automatically).
+- If the source book is `.mobi`, `.azw`, `.azw3`, or `.prc`, verify Calibre's `ebook-convert` is installed (`bookvoice` invokes it automatically).
 
 ## Step-by-Step Workflow
 
 ### 1. Identify the Book
 - If the user has not provided a file path, ask for the path to the `.epub`, `.mobi`, `.azw`, or `.azw3` file (or offer to search their e-book directory if they give a title).
 - If the file is `.mobi` / `.azw` / `.azw3`:
-  - Inform the user that `epub2audiobook` automatically converts Kindle formats to EPUB via Calibre's `ebook-convert`.
-  - If they also want to keep a permanent `.epub` copy, run `epub2audiobook mobi2epub <input> [-o <output.epub>]`.
+  - Inform the user that `bookvoice` automatically converts Kindle formats to EPUB via Calibre's `ebook-convert`.
+  - If they also want to keep a permanent `.epub` copy, run `bookvoice mobi2epub <input> [-o <output.epub>]`.
 
 ### 2. Inspect the Book
 Run:
 ```bash
-epub2audiobook info "<book_path>"
+bookvoice info "<book_path>"
 ```
 Summarize the findings for the user:
 - **Title & Author**
@@ -48,7 +48,7 @@ Ask the user to confirm or customize the following options (batch them into one 
    - **MP3 per chapter only** (`--no-m4b`)
 2. **Language & voice**:
    - Confirm the detected language and default voice (e.g. `pl-PL-MarekNeural`, `en-US-AndrewNeural`).
-   - Offer to list voices for a language (`epub2audiobook voices <locale>`) or generate short voice comparison clips (`epub2audiobook sample "<book_path>"`) before converting the whole book.
+   - Offer to list voices for a language (`bookvoice voices <locale>`) or generate short voice comparison clips (`bookvoice sample "<book_path>"`) before converting the whole book.
 3. **Chapter scope**:
    - **Full book** (all chapters)
    - **Skip front-matter** (e.g. `--only 2-<N>` if chapter 1 is a copyright/title page)
@@ -63,7 +63,7 @@ Ask the user to confirm or customize the following options (batch them into one 
 ### 4. Optional: Voice Sampling
 If the user wants to compare voices first:
 ```bash
-epub2audiobook sample "<book_path>" --chars 900 -o voice-samples
+bookvoice sample "<book_path>" --chars 900 -o voice-samples
 ```
 (Add `--voice <name>` flags if they specified particular voices.)
 Tell the user where the sample `.mp3` files are saved so they can listen and choose their preferred voice before proceeding to Step 5.
@@ -71,7 +71,7 @@ Tell the user where the sample `.mp3` files are saved so they can listen and cho
 ### 5. Run the Conversion
 Construct and run the `convert` command based on the user's answers, e.g.:
 ```bash
-epub2audiobook convert "<book_path>" \
+bookvoice convert "<book_path>" \
   --voice <voice> \
   --rate <rate> \
   --bitrate <bitrate> \

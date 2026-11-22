@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from epub2audiobook import cli, pipeline, tts
-from epub2audiobook.audio import ffmetadata, write_concat_list
-from epub2audiobook.epub import parse_epub
+from bookvoice import cli, pipeline, tts
+from bookvoice.audio import ffmetadata, write_concat_list
+from bookvoice.epub import parse_epub
 
 
 def test_ffmetadata_chapters_and_escaping() -> None:

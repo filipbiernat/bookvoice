@@ -267,7 +267,7 @@ def parse_epub(
     """
     path = Path(path)
     if is_mobi(path):
-        with tempfile.TemporaryDirectory(prefix="epub2audiobook_") as tmp:
+        with tempfile.TemporaryDirectory(prefix="bookvoice_") as tmp:
             try:
                 converted = mobi_to_epub(path, Path(tmp) / f"{path.stem}.epub")
             except MobiConvertError as exc:

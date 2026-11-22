@@ -15,7 +15,7 @@ from . import __version__, audio, mobi, pipeline, tts
 from .epub import Book, Chapter, Cover, EpubError, parse_epub
 from .text import DEFAULT_HEADING_PATTERN, parse_selection, safe_filename
 
-log = logging.getLogger("epub2audiobook")
+log = logging.getLogger("bookvoice")
 
 _IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
@@ -78,7 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     voice.add_argument("--rate", default="+0%", help="speaking rate, e.g. '-10%%' or '+15%%'")
 
     parser = argparse.ArgumentParser(
-        prog="epub2audiobook",
+        prog="bookvoice",
         description="Convert EPUB e-books into chaptered audiobooks (MP3 + M4B) "
         "using Microsoft Edge neural text-to-speech.",
     )
@@ -182,7 +182,7 @@ async def _check_voice(voice: str) -> None:
         log.warning("could not fetch the voice list (%s); continuing", exc)
         return
     if voice not in known:
-        raise ValueError(f"unknown voice {voice!r}; see 'epub2audiobook voices'")
+        raise ValueError(f"unknown voice {voice!r}; see 'bookvoice voices'")
 
 
 def _excerpt(chapter: Chapter, chars: int) -> str:

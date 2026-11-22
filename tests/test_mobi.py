@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from epub2audiobook import cli, mobi
-from epub2audiobook.epub import EpubError, parse_epub
+from bookvoice import cli, mobi
+from bookvoice.epub import EpubError, parse_epub
 
 
 @pytest.mark.parametrize(
@@ -81,7 +81,7 @@ def test_parse_epub_auto_converts_mobi(
         shutil.copyfile(sample_epub, dst)
         return dst
 
-    monkeypatch.setattr("epub2audiobook.epub.mobi_to_epub", fake_convert)
+    monkeypatch.setattr("bookvoice.epub.mobi_to_epub", fake_convert)
 
     book = parse_epub(src)
     assert book.title == "Test Book"
@@ -96,7 +96,7 @@ def test_parse_epub_wraps_mobi_error(tmp_path: Path, monkeypatch: pytest.MonkeyP
     def fail(_src: Path, _dst: Path) -> Path:
         raise mobi.MobiConvertError("Calibre missing")
 
-    monkeypatch.setattr("epub2audiobook.epub.mobi_to_epub", fail)
+    monkeypatch.setattr("bookvoice.epub.mobi_to_epub", fail)
 
     with pytest.raises(EpubError, match="Calibre missing"):
         parse_epub(src)

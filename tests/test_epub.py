@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from epub2audiobook.epub import EpubError, extract_document, parse_epub
+from bookvoice.epub import EpubError, extract_document, parse_epub
 
 from .conftest import COVER_BYTES, OPF, write_epub
 

@@ -3,7 +3,7 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "epub2audiobook"
+name = "bookvoice"
 dynamic = ["version"]
 description = "Convert EPUB e-books into chaptered audiobooks (MP3 + M4B) using Microsoft Edge neural text-to-speech."
 readme = "README.md"
@@ -27,14 +27,14 @@ dependencies = ["edge-tts>=7.0", "mutagen>=1.47"]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
-epub2audiobook = "epub2audiobook.cli:main"
+bookvoice = "bookvoice.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/filipbiernat/epub2audiobook"
-Issues = "https://github.com/filipbiernat/epub2audiobook/issues"
+Homepage = "https://github.com/filipbiernat/bookvoice"
+Issues = "https://github.com/filipbiernat/bookvoice/issues"
 
 [tool.hatch.version]
-path = "src/epub2audiobook/__init__.py"
+path = "src/bookvoice/__init__.py"
 
 [tool.ruff]
 line-length = 100

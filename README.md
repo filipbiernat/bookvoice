@@ -1,11 +1,11 @@
-# epub2audiobook
+# bookvoice
 
-[![CI](https://github.com/filipbiernat/epub2audiobook/actions/workflows/ci.yml/badge.svg)](https://github.com/filipbiernat/epub2audiobook/actions/workflows/ci.yml)
+[![CI](https://github.com/filipbiernat/bookvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/filipbiernat/bookvoice/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
 Turn EPUB e-books into audiobooks with natural-sounding neural voices.
-**epub2audiobook** reads the book's chapters, synthesises them with
+**bookvoice** reads the book's chapters, synthesises them with
 [Microsoft Edge text-to-speech](https://github.com/rany2/edge-tts) and produces:
 
 - one tagged **MP3 per chapter** (title, author, track number, cover art), and
@@ -24,7 +24,7 @@ Turn EPUB e-books into audiobooks with natural-sounding neural voices.
   stopped.
 - EBU R128 loudness normalisation for consistent volume.
 - Voice comparison mode to pick the voice you like before converting a whole book.
-- Includes an AI Agent Skill (`.agents/skills/epub2audiobook/SKILL.md`) for guided
+- Includes an AI Agent Skill (`.agents/skills/bookvoice/SKILL.md`) for guided
   interactive audiobook generation.
 - No API key needed.
 
@@ -42,30 +42,30 @@ Turn EPUB e-books into audiobooks with natural-sounding neural voices.
 ## Installation
 
 ```bash
-pipx install git+https://github.com/filipbiernat/epub2audiobook.git
+pipx install git+https://github.com/filipbiernat/bookvoice.git
 ```
 
 or with plain pip:
 
 ```bash
-pip install git+https://github.com/filipbiernat/epub2audiobook.git
+pip install git+https://github.com/filipbiernat/bookvoice.git
 ```
 
 ## Usage
 
 ```bash
 # 1. Inspect the book: metadata, detected chapters and their sizes
-epub2audiobook info book.epub
+bookvoice info book.epub
 
 # 2. (Optional) compare voices on a short excerpt
-epub2audiobook sample book.epub                       # all voices for the book's language
-epub2audiobook sample book.epub --voice pl-PL-MarekNeural --voice pl-PL-ZofiaNeural
+bookvoice sample book.epub                       # all voices for the book's language
+bookvoice sample book.epub --voice pl-PL-MarekNeural --voice pl-PL-ZofiaNeural
 
 # 3. Try a couple of chapters first ...
-epub2audiobook convert book.epub --only 1-2
+bookvoice convert book.epub --only 1-2
 
 # 4. ... then convert the whole book (already finished chapters are skipped)
-epub2audiobook convert book.epub --voice pl-PL-MarekNeural --rate +10%
+bookvoice convert book.epub --voice pl-PL-MarekNeural --rate +10%
 ```
 
 The result lands in `./<Author> - <Title>/`:
@@ -89,7 +89,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `info`      | Show book metadata, the default voice and the chapter list.        |
 | `convert`   | Synthesise chapters to MP3 and package them as M4B.                |
 | `m4b`       | (Re)build the M4B from already synthesised chapter MP3s.           |
-| `voices`    | List available voices, e.g. `epub2audiobook voices pl`.            |
+| `voices`    | List available voices, e.g. `bookvoice voices pl`.            |
 | `sample`    | Read a short excerpt with several voices to compare them.          |
 | `mobi2epub` | Convert a `.mobi`/`.azw`/`.azw3` file to `.epub` via Calibre.      |
 
@@ -110,7 +110,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `--keep-work`           | –                       | Keep intermediate files in `<output>/.work`.                  |
 | `--heading-pattern RE`  | built-in                | Regex splitting headings like `Chapter 1 Title` (see below).  |
 
-Run `epub2audiobook <command> --help` for the full list.
+Run `bookvoice <command> --help` for the full list.
 
 ### Chapter titles
 
@@ -135,20 +135,20 @@ flowchart LR
 
 | Module                     | Responsibility                                      |
 | -------------------------- | --------------------------------------------------- |
-| `epub2audiobook.epub`      | EPUB parsing (metadata, cover, chapters, TOC).      |
-| `epub2audiobook.mobi`      | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
-| `epub2audiobook.text`      | Text normalisation, chunking, titles, file names.   |
-| `epub2audiobook.tts`       | Edge TTS synthesis with retries and voice listing.  |
-| `epub2audiobook.audio`     | FFmpeg wrappers: concat, silence, M4B packaging.    |
-| `epub2audiobook.tagging`   | ID3 tags for chapter MP3s.                          |
-| `epub2audiobook.pipeline`  | Orchestration of the whole conversion.              |
-| `epub2audiobook.cli`       | Command-line interface.                             |
+| `bookvoice.epub`      | EPUB parsing (metadata, cover, chapters, TOC).      |
+| `bookvoice.mobi`      | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
+| `bookvoice.text`      | Text normalisation, chunking, titles, file names.   |
+| `bookvoice.tts`       | Edge TTS synthesis with retries and voice listing.  |
+| `bookvoice.audio`     | FFmpeg wrappers: concat, silence, M4B packaging.    |
+| `bookvoice.tagging`   | ID3 tags for chapter MP3s.                          |
+| `bookvoice.pipeline`  | Orchestration of the whole conversion.              |
+| `bookvoice.cli`       | Command-line interface.                             |
 
 ## Development
 
 ```bash
-git clone https://github.com/filipbiernat/epub2audiobook.git
-cd epub2audiobook
+git clone https://github.com/filipbiernat/bookvoice.git
+cd bookvoice
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 

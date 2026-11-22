@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from epub2audiobook.text import (
+from bookvoice.text import (
     DEFAULT_HEADING_PATTERN,
     chunk_paragraphs,
     format_heading,
