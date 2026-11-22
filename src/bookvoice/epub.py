@@ -87,16 +87,32 @@ class Book:
 # HTML text extraction
 # ---------------------------------------------------------------------------
 class _BlockExtractor(HTMLParser):
-    """Collects text blocks from (X)HTML, flagging the ones inside headings."""
+    """Collects text blocks from (X)HTML, optionally splitting at TOC anchor IDs."""
 
-    def __init__(self) -> None:
+    def __init__(self, split_ids: Iterable[str] = ()) -> None:
         super().__init__(convert_charrefs=True)
-        self.blocks: list[tuple[bool, str]] = []
+        self._split_ids: set[str] = set(split_ids)
+        self.sections: list[tuple[str | None, list[tuple[bool, str]]]] = [(None, [])]
         self._buffer: list[str] = []
         self._heading_depth = 0
         self._skip_depth = 0
 
-    def handle_starttag(self, tag: str, attrs: list) -> None:
+    @property
+    def blocks(self) -> list[tuple[bool, str]]:
+        return self.sections[0][1]
+
+    def _maybe_split(self, attrs: list[tuple[str, str | None]]) -> None:
+        if not self._split_ids or self._skip_depth:
+            return
+        for key, value in attrs:
+            if key in ("id", "name") and value and value in self._split_ids:
+                self._flush()
+                self._split_ids.discard(value)
+                self.sections.append((value, []))
+                return
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._maybe_split(attrs)
         if tag in _SKIP_TAGS:
             self._skip_depth += 1
         elif tag == "br":
@@ -107,8 +123,9 @@ class _BlockExtractor(HTMLParser):
         elif tag in _BLOCK_TAGS:
             self._flush()
 
-    def handle_startendtag(self, tag: str, attrs: list) -> None:
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         # Self-closing tags (<br/>, <hr/>, <div/>) never open a scope.
+        self._maybe_split(attrs)
         if tag == "br":
             self._buffer.append("\n")
         elif tag in _BLOCK_TAGS:
@@ -135,7 +152,22 @@ class _BlockExtractor(HTMLParser):
         text = "".join(self._buffer)
         self._buffer.clear()
         if _HAS_WORD.search(text):
-            self.blocks.append((self._heading_depth > 0, text))
+            self.sections[-1][1].append((self._heading_depth > 0, text))
+
+
+def _blocks_to_chapter(
+    blocks: list[tuple[bool, str]],
+    heading_pattern: re.Pattern[str] | None = DEFAULT_HEADING_PATTERN,
+) -> tuple[str | None, list[str]]:
+    title: str | None = None
+    paragraphs: list[str] = []
+    for is_heading, raw in blocks:
+        if is_heading and title is None:
+            title = format_heading(raw.split("\n"), heading_pattern) or None
+            if title:
+                continue
+        paragraphs.append(normalize_whitespace(raw))
+    return title, paragraphs
 
 
 def extract_document(
@@ -149,15 +181,25 @@ def extract_document(
     extractor = _BlockExtractor()
     extractor.feed(markup)
     extractor.close()
-    title: str | None = None
-    paragraphs: list[str] = []
-    for is_heading, raw in extractor.blocks:
-        if is_heading and title is None:
-            title = format_heading(raw.split("\n"), heading_pattern) or None
-            if title:
-                continue
-        paragraphs.append(normalize_whitespace(raw))
-    return title, paragraphs
+    return _blocks_to_chapter(extractor.blocks, heading_pattern)
+
+
+def extract_sections(
+    markup: str,
+    split_ids: Iterable[str] = (),
+    heading_pattern: re.Pattern[str] | None = DEFAULT_HEADING_PATTERN,
+) -> list[tuple[str | None, str | None, list[str]]]:
+    """Extract ``(anchor_id, title, paragraphs)`` sections from an (X)HTML document."""
+    extractor = _BlockExtractor(split_ids)
+    extractor.feed(markup)
+    extractor.close()
+    results: list[tuple[str | None, str | None, list[str]]] = []
+    for anchor_id, blocks in extractor.sections:
+        title, paragraphs = _blocks_to_chapter(blocks, heading_pattern)
+        if title is None and not paragraphs:
+            continue
+        results.append((anchor_id, title, paragraphs))
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -214,19 +256,31 @@ def _find_cover(
     return None
 
 
-def _toc_labels(
+def _resolve_with_fragment(base_dir: str, href: str) -> tuple[str, str | None]:
+    raw_path, sep, raw_frag = href.partition("#")
+    path = _resolve(base_dir, raw_path)
+    frag = unquote(raw_frag).strip() if sep else ""
+    return path, (frag or None)
+
+
+def _toc_entries(
     archive: zipfile.ZipFile,
     opf_dir: str,
     spine: ET.Element | None,
     manifest: dict[str, _ManifestItem],
-) -> dict[str, str]:
-    """Map document path -> first table-of-contents label pointing at it."""
-    labels: dict[str, str] = {}
+) -> dict[str, list[tuple[str | None, str]]]:
+    """Map document path -> top-level TOC ``(fragment_id, label)`` entries."""
+    entries: dict[str, list[tuple[str | None, str]]] = {}
+    seen: dict[str, set[str | None]] = {}
 
     def add(base_dir: str, href: str | None, label: str) -> None:
-        path = _resolve(base_dir, href or "")
-        if path and label:
-            labels.setdefault(path, label)
+        path, frag = _resolve_with_fragment(base_dir, href or "")
+        if not path or not label:
+            return
+        bucket = seen.setdefault(path, set())
+        if frag not in bucket:
+            bucket.add(frag)
+            entries.setdefault(path, []).append((frag, label))
 
     nav = next((i for i in manifest.values() if "nav" in i.properties), None)
     if nav is not None:
@@ -235,7 +289,18 @@ def _toc_labels(
         except EpubError:
             root = None
         if root is not None:
-            for link in root.iterfind(".//{*}a"):
+            toc_nav = next(
+                (
+                    el
+                    for el in root.iterfind(".//{*}nav")
+                    if "toc" in (el.get("{http://www.idpf.org/2007/ops}type") or "").split()
+                ),
+                None,
+            )
+            links = (
+                list(toc_nav.findall("./{*}ol/{*}li/{*}a")) if toc_nav is not None else []
+            ) or list(root.iterfind(".//{*}a"))
+            for link in links:
                 label = normalize_whitespace("".join(link.itertext()))
                 add(posixpath.dirname(nav.path), link.get("href"), label)
 
@@ -249,12 +314,15 @@ def _toc_labels(
         except EpubError:
             root = None
         if root is not None:
-            for point in root.iterfind(".//{*}navPoint"):
+            points = list(root.findall("./{*}navMap/{*}navPoint")) or list(
+                root.iterfind(".//{*}navPoint")
+            )
+            for point in points:
                 content = point.find("{*}content")
                 label = _first_text(point, "{*}navLabel/{*}text")
                 if content is not None:
                     add(posixpath.dirname(ncx.path), content.get("src"), label)
-    return labels
+    return entries
 
 
 def parse_epub(
@@ -301,8 +369,9 @@ def parse_epub(
                 )
 
         spine = package.find("{*}spine")
-        toc = _toc_labels(archive, opf_dir, spine, manifest)
+        toc = _toc_entries(archive, opf_dir, spine, manifest)
         chapters: list[Chapter] = []
+        prev_was_toc_chapter = False
         for ref in spine.iterfind("{*}itemref") if spine is not None else ():
             item = manifest.get(ref.get("idref", ""))
             if item is None or item.media_type not in _DOCUMENT_TYPES:
@@ -311,12 +380,37 @@ def parse_epub(
                 markup = archive.read(item.path).decode("utf-8", errors="replace")
             except KeyError:
                 continue
-            title, paragraphs = extract_document(markup, heading_pattern)
-            if title is None and not paragraphs:
-                continue  # e.g. a cover page containing only an image
-            index = len(chapters) + 1
-            title = title or toc.get(item.path) or f"Section {index}"
-            chapters.append(Chapter(index, title, tuple(paragraphs)))
+            doc_toc = toc.get(item.path, [])
+            frag_labels = {frag: label for frag, label in doc_toc if frag}
+            # Split a single XHTML file only when the TOC defines 2+ anchors inside it.
+            split_ids = frag_labels.keys() if len(frag_labels) >= 2 else ()
+            fallback_label = doc_toc[0][1] if doc_toc else None
+            for anchor_id, title, paragraphs in extract_sections(
+                markup, split_ids=split_ids, heading_pattern=heading_pattern
+            ):
+                # Heal mid-chapter file splits (e.g. Calibre 260 KB splits): untitled
+                # leading text before the first TOC anchor continues the previous chapter.
+                if (
+                    split_ids
+                    and anchor_id is None
+                    and title is None
+                    and prev_was_toc_chapter
+                    and chapters
+                ):
+                    last = chapters[-1]
+                    chapters[-1] = Chapter(
+                        last.index, last.title, last.paragraphs + tuple(paragraphs)
+                    )
+                    continue
+                index = len(chapters) + 1
+                resolved_title = (
+                    title
+                    or (frag_labels.get(anchor_id) if anchor_id else None)
+                    or (fallback_label if not split_ids else None)
+                    or f"Section {index}"
+                )
+                chapters.append(Chapter(index, resolved_title, tuple(paragraphs)))
+                prev_was_toc_chapter = bool(anchor_id) or bool(doc_toc)
 
         if not chapters:
             raise EpubError(f"no readable text found in {path}")

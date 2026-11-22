@@ -97,3 +97,76 @@ def test_extract_document_without_heading() -> None:
     title, paragraphs = extract_document("<html><body><p>Only text</p></body></html>")
     assert title is None
     assert paragraphs == ["Only text"]
+
+
+def test_parse_epub_splits_multi_chapter_xhtml_by_toc_anchors(
+    tmp_path: Path, epub_files: dict
+) -> None:
+    epub_files["OEBPS/text/ch1.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<h2 id="c1">Chapter 1 First</h2><p>Alpha text.</p>'
+        "<h3>Internal subheading</h3><p>Still chapter one.</p>"
+        '<h2 id="c2">Chapter 2 Second</h2><p>Beta text.</p>'
+        "</body></html>"
+    )
+    epub_files["OEBPS/nav.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'
+        '<body><nav epub:type="toc"><ol>'
+        '<li><a href="text/title%20page.xhtml">Title Page</a></li>'
+        '<li><a href="text/ch2.xhtml#start">Prologue</a></li>'
+        '<li><a href="text/ch1.xhtml#c1">Chapter 1 First</a></li>'
+        '<li><a href="text/ch1.xhtml#c2">Chapter 2 Second</a></li>'
+        "</ol></nav></body></html>"
+    )
+    book = parse_epub(write_epub(tmp_path / "multi.epub", epub_files))
+    assert [c.title for c in book.chapters] == [
+        "Title Page",
+        "Prologue - The Storm",
+        "Chapter 1 - First",
+        "Chapter 2 - Second",
+    ]
+    assert book.chapters[2].paragraphs == (
+        "Alpha text.",
+        "Internal subheading",
+        "Still chapter one.",
+    )
+    assert book.chapters[3].paragraphs == ("Beta text.",)
+
+
+def test_parse_epub_heals_mid_chapter_split_before_toc_anchor(
+    tmp_path: Path, epub_files: dict
+) -> None:
+    epub_files["OEBPS/text/ch2.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<h2 id="c1">Chapter 1 Start</h2><p>First half.</p>'
+        "</body></html>"
+    )
+    epub_files["OEBPS/text/ch1.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        "<p>Second half of chapter one.</p>"
+        '<h2 id="c2">Chapter 2 Next</h2><p>Chapter two text.</p>'
+        '<h2 id="c3">Chapter 3 End</h2><p>Chapter three text.</p>'
+        "</body></html>"
+    )
+    epub_files["OEBPS/nav.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'
+        '<body><nav epub:type="toc"><ol>'
+        '<li><a href="text/title%20page.xhtml">Title Page</a></li>'
+        '<li><a href="text/ch2.xhtml#c1">Chapter 1 Start</a></li>'
+        '<li><a href="text/ch1.xhtml#c2">Chapter 2 Next</a></li>'
+        '<li><a href="text/ch1.xhtml#c3">Chapter 3 End</a></li>'
+        "</ol></nav></body></html>"
+    )
+    book = parse_epub(write_epub(tmp_path / "healed.epub", epub_files))
+    assert [c.title for c in book.chapters] == [
+        "Title Page",
+        "Chapter 1 - Start",
+        "Chapter 2 - Next",
+        "Chapter 3 - End",
+    ]
+    assert book.chapters[1].paragraphs == ("First half.", "Second half of chapter one.")
