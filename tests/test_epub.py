@@ -68,9 +68,15 @@ def test_fallback_title_and_metadata(tmp_path: Path, epub_files: dict) -> None:
     )
     epub_files["OEBPS/content.opf"] = opf
     book = parse_epub(write_epub(tmp_path / "untitled.epub", epub_files))
-    assert book.chapters[0].title == "Section 1"
+    assert book.chapters[0].title == "Wprowadzenie"
+    assert book.chapters[0].spoken_title == ""
     assert book.title == "untitled"
     assert book.author == "Unknown Author"
+
+    epub_files["OEBPS/content.opf"] = opf.replace("<dc:language>pl</dc:language>", "")
+    en_book = parse_epub(write_epub(tmp_path / "untitled_en.epub", epub_files))
+    assert en_book.chapters[0].title == "Introduction"
+    assert en_book.chapters[0].spoken_title == ""
 
 
 def test_select(sample_epub: Path) -> None:
@@ -170,3 +176,87 @@ def test_parse_epub_heals_mid_chapter_split_before_toc_anchor(
         "Chapter 3 - End",
     ]
     assert book.chapters[1].paragraphs == ("First half.", "Second half of chapter one.")
+
+
+def test_parse_epub_heals_standalone_untitled_continuation_file(
+    tmp_path: Path, epub_files: dict
+) -> None:
+    epub_files["OEBPS/text/ch2.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        '<h2 id="c1">Rozdział 1 Początek</h2><p>Pierwsza część.</p>'
+        "</body></html>"
+    )
+    epub_files["OEBPS/text/ch1.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        "<p>Druga część rozdziału pierwszego bez nagłówka.</p>"
+        "</body></html>"
+    )
+    epub_files["OEBPS/nav.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">'
+        '<body><nav epub:type="toc"><ol>'
+        '<li><a href="text/ch2.xhtml#c1">Rozdział 1 Początek</a></li>'
+        "</ol></nav></body></html>"
+    )
+    epub_files["OEBPS/content.opf"] = OPF.replace('toc="ncx"', "").replace(
+        '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>', ""
+    )
+    book = parse_epub(write_epub(tmp_path / "split_single.epub", epub_files))
+    assert [c.title for c in book.chapters] == [
+        "Wprowadzenie",
+        "Rozdział 1 - Początek",
+    ]
+    assert book.chapters[0].spoken_title == ""
+    assert book.chapters[1].paragraphs == (
+        "Pierwsza część.",
+        "Druga część rozdziału pierwszego bez nagłówka.",
+    )
+
+
+def test_parse_epub_merges_multiple_leading_front_matter_sections(
+    tmp_path: Path, epub_files: dict
+) -> None:
+    epub_files["OEBPS/text/ch2.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        "<p>Dla Wandy</p><p>Motto książki.</p>"
+        "</body></html>"
+    )
+    epub_files["OEBPS/text/ch1.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        "<h2>Rozdział 1 Start</h2><p>Treść rozdziału.</p>"
+        "</body></html>"
+    )
+    epub_files["OEBPS/content.opf"] = (
+        OPF.replace(' properties="nav"', "")
+        .replace('toc="ncx"', "")
+        .replace('<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>', "")
+    )
+    book = parse_epub(write_epub(tmp_path / "front_matter.epub", epub_files))
+    assert [c.index for c in book.chapters] == [1, 2]
+    assert [c.title for c in book.chapters] == ["Wprowadzenie", "Rozdział 1 - Start"]
+    assert book.chapters[0].spoken_title == ""
+    assert book.chapters[0].paragraphs == ("Jane Doe", "TEST BOOK", "Dla Wandy", "Motto książki.")
+    assert book.chapters[1].spoken_title == "Rozdział 1. Start."
+
+
+def test_parse_epub_keeps_all_untitled_chapters_separate(tmp_path: Path, epub_files: dict) -> None:
+    epub_files["OEBPS/text/ch2.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Drugi plik.</p></body></html>'
+    )
+    epub_files["OEBPS/text/ch1.xhtml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Trzeci plik.</p></body></html>'
+    )
+    epub_files["OEBPS/content.opf"] = (
+        OPF.replace(' properties="nav"', "")
+        .replace('toc="ncx"', "")
+        .replace('<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>', "")
+    )
+    book = parse_epub(write_epub(tmp_path / "all_untitled.epub", epub_files))
+    assert [c.title for c in book.chapters] == ["Część 1", "Część 2", "Część 3"]
+    assert all(c.spoken_title == "" for c in book.chapters)

@@ -85,7 +85,9 @@ async def render_chapter(
 
     chapter_dir = work_dir / f"chapter_{chapter.index:04d}"
     chapter_dir.mkdir(parents=True, exist_ok=True)
-    texts = [chapter.spoken_title, *chunk_paragraphs(chapter.paragraphs, opts.chunk_chars)]
+    chunks = chunk_paragraphs(chapter.paragraphs, opts.chunk_chars)
+    has_spoken_title = bool(chapter.spoken_title)
+    texts = [chapter.spoken_title, *chunks] if has_spoken_title else chunks
     parts = [chapter_dir / f"{i:04d}.mp3" for i in range(len(texts))]
     log.info("%s %s: %d chars, %d chunks", label, chapter.title, chapter.char_count, len(texts))
     if tracker is not None:
@@ -100,11 +102,15 @@ async def render_chapter(
     if tracker is not None:
         tracker.finish_chapter()
 
-    pause_title = audio.make_silence(work_dir / "pause_title.mp3", opts.pause_after_title)
     pause_chunk = audio.make_silence(work_dir / "pause_chunk.mp3", opts.pause_between_chunks)
     pause_end = audio.make_silence(work_dir / "pause_end.mp3", opts.pause_at_end)
-    sequence = [parts[0], pause_title]
-    for part in parts[1:]:
+    sequence: list[Path] = []
+    body_parts = parts
+    if has_spoken_title:
+        pause_title = audio.make_silence(work_dir / "pause_title.mp3", opts.pause_after_title)
+        sequence = [parts[0], pause_title]
+        body_parts = parts[1:]
+    for part in body_parts:
         sequence += [part, pause_chunk]
     sequence[-1] = pause_end
 

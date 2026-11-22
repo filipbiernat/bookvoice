@@ -89,3 +89,46 @@ def test_cli_convert_background(
     out = capsys.readouterr().out
     assert "PID 4242" in out
     assert "bookvoice.log" in out
+
+
+def test_render_chapter_skips_spoken_title_when_unannounced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    from bookvoice.epub import Book, Chapter
+
+    chapter = Chapter(
+        index=1,
+        title="Wprowadzenie",
+        paragraphs=("Tom Clancy", "Dla Wandy"),
+        announce_title=False,
+    )
+    book = Book(title="Czas patriotów", author="Tom Clancy", language="pl", chapters=(chapter,))
+    synthesised: list[str] = []
+
+    async def fake_synthesize_all(jobs, **_kwargs):
+        for text, dst in jobs:
+            synthesised.append(text)
+            dst.write_bytes(b"mp3")
+
+    def fake_make_silence(dst: Path, _seconds: float) -> Path:
+        dst.write_bytes(b"silence")
+        return dst
+
+    def fake_concat_mp3(_files, dst: Path, **_kwargs) -> None:
+        dst.write_bytes(b"final")
+
+    monkeypatch.setattr("bookvoice.pipeline.synthesize_all", fake_synthesize_all)
+    monkeypatch.setattr("bookvoice.pipeline.audio.make_silence", fake_make_silence)
+    monkeypatch.setattr("bookvoice.pipeline.audio.concat_mp3", fake_concat_mp3)
+    monkeypatch.setattr("bookvoice.pipeline.tag_mp3", lambda *_a, **_kw: None)
+
+    out_dir = tmp_path / "out"
+    work_dir = out_dir / ".work"
+    work_dir.mkdir(parents=True)
+    opts = pipeline.ConvertOptions(voice="pl-PL-MarekNeural")
+
+    dst = asyncio.run(pipeline.render_chapter(book, chapter, out_dir, work_dir, opts))
+    assert dst.name == "01 - Wprowadzenie.mp3"
+    assert synthesised == ["Tom Clancy\nDla Wandy"]

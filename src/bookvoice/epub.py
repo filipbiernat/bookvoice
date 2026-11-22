@@ -28,6 +28,40 @@ _BLOCK_TAGS = frozenset(
 )  # fmt: skip
 _SKIP_TAGS = frozenset({"head", "script", "style", "svg", "math", "noscript", "template"})
 _HAS_WORD = re.compile(r"\w")
+_SECTION_LABELS = {
+    "cs": "Oddíl",
+    "de": "Abschnitt",
+    "en": "Section",
+    "es": "Sección",
+    "fr": "Section",
+    "it": "Sezione",
+    "nl": "Sectie",
+    "pl": "Część",
+    "pt": "Seção",
+    "uk": "Розділ",
+}
+_INTRO_LABELS = {
+    "cs": "Úvod",
+    "de": "Einleitung",
+    "en": "Introduction",
+    "es": "Introducción",
+    "fr": "Introduction",
+    "it": "Introduzione",
+    "nl": "Inleiding",
+    "pl": "Wprowadzenie",
+    "pt": "Introdução",
+    "uk": "Вступ",
+}
+
+
+def _section_label(language: str) -> str:
+    """Return a localised fallback label for untitled sections."""
+    return _SECTION_LABELS.get(language.split("-")[0].lower(), "Section")
+
+
+def _intro_label(language: str) -> str:
+    """Return a localised label for merged untitled front matter."""
+    return _INTRO_LABELS.get(language.split("-")[0].lower(), "Introduction")
 
 
 class EpubError(Exception):
@@ -51,10 +85,11 @@ class Chapter:
     index: int
     title: str
     paragraphs: tuple[str, ...]
+    announce_title: bool = True
 
     @property
     def spoken_title(self) -> str:
-        return spoken_title(self.title)
+        return spoken_title(self.title) if self.announce_title else ""
 
     @property
     def char_count(self) -> int:
@@ -357,6 +392,8 @@ def parse_epub(
         package = _parse_xml(archive, opf_path)
 
         metadata = package.find("{*}metadata")
+        language = _first_text(metadata, "{*}language") or "en"
+        section_label = _section_label(language)
         manifest: dict[str, _ManifestItem] = {}
         for item in package.iterfind("{*}manifest/{*}item"):
             item_id, href = item.get("id"), item.get("href")
@@ -370,7 +407,7 @@ def parse_epub(
 
         spine = package.find("{*}spine")
         toc = _toc_entries(archive, opf_dir, spine, manifest)
-        chapters: list[Chapter] = []
+        raw_chapters: list[tuple[bool, str | None, list[str]]] = []
         prev_was_toc_chapter = False
         for ref in spine.iterfind("{*}itemref") if spine is not None else ():
             item = manifest.get(ref.get("idref", ""))
@@ -389,31 +426,58 @@ def parse_epub(
                 markup, split_ids=split_ids, heading_pattern=heading_pattern
             ):
                 # Heal mid-chapter file splits (e.g. Calibre 260 KB splits): untitled
-                # leading text before the first TOC anchor continues the previous chapter.
+                # leading text before the first TOC anchor, or an untitled continuation
+                # file without TOC entries, continues the previous chapter.
                 if (
-                    split_ids
+                    (split_ids or not doc_toc)
                     and anchor_id is None
                     and title is None
                     and prev_was_toc_chapter
-                    and chapters
+                    and raw_chapters
                 ):
-                    last = chapters[-1]
-                    chapters[-1] = Chapter(
-                        last.index, last.title, last.paragraphs + tuple(paragraphs)
-                    )
+                    raw_chapters[-1][2].extend(paragraphs)
                     continue
-                index = len(chapters) + 1
                 resolved_title = (
                     title
                     or (frag_labels.get(anchor_id) if anchor_id else None)
                     or (fallback_label if not split_ids else None)
-                    or f"Section {index}"
                 )
-                chapters.append(Chapter(index, resolved_title, tuple(paragraphs)))
+                raw_chapters.append((resolved_title is not None, resolved_title, list(paragraphs)))
                 prev_was_toc_chapter = bool(anchor_id) or bool(doc_toc)
 
-        if not chapters:
+        if not raw_chapters:
             raise EpubError(f"no readable text found in {path}")
+
+        # Merge all leading untitled front-matter sections into one intro chapter
+        # whenever the book has at least one titled chapter following them.
+        first_titled = next((i for i, (titled, _, _) in enumerate(raw_chapters) if titled), None)
+        chapters: list[Chapter] = []
+        if first_titled is not None and first_titled > 0:
+            front_paragraphs: list[str] = []
+            for _, _, paras in raw_chapters[:first_titled]:
+                front_paragraphs.extend(paras)
+            chapters.append(
+                Chapter(
+                    1,
+                    _intro_label(language),
+                    tuple(front_paragraphs),
+                    announce_title=False,
+                )
+            )
+            remaining = raw_chapters[first_titled:]
+        else:
+            remaining = raw_chapters
+
+        for titled, resolved_title, paras in remaining:
+            index = len(chapters) + 1
+            chapters.append(
+                Chapter(
+                    index,
+                    resolved_title or f"{section_label} {index}",
+                    tuple(paras),
+                    announce_title=titled,
+                )
+            )
 
         authors = [
             normalize_whitespace(el.text or "")
@@ -422,7 +486,7 @@ def parse_epub(
         return Book(
             title=_first_text(metadata, "{*}title") or path.stem,
             author=", ".join(a for a in authors if a) or "Unknown Author",
-            language=_first_text(metadata, "{*}language") or "en",
+            language=language,
             chapters=tuple(chapters),
             cover=_find_cover(archive, metadata, manifest),
         )
