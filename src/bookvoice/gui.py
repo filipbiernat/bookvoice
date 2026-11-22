@@ -404,17 +404,26 @@ class BookvoiceApp(tk.Tk):
         row = ttk.Frame(f)
         row.grid(row=r, column=1, sticky="w", pady=4)
         self.rb_mp3_m4b = ttk.Radiobutton(
-            row, value="mp3_m4b", variable=self.v_format, style="Bold.TRadiobutton",
+            row,
+            value="mp3_m4b",
+            variable=self.v_format,
+            style="Bold.TRadiobutton",
             command=self._on_format_change,
         )
         self.rb_mp3_m4b.pack(side="left", padx=(0, 14))
         self.rb_mp3_only = ttk.Radiobutton(
-            row, value="mp3_only", variable=self.v_format, style="Bold.TRadiobutton",
+            row,
+            value="mp3_only",
+            variable=self.v_format,
+            style="Bold.TRadiobutton",
             command=self._on_format_change,
         )
         self.rb_mp3_only.pack(side="left", padx=(0, 14))
         self.rb_m4b_only = ttk.Radiobutton(
-            row, value="m4b_only", variable=self.v_format, style="Bold.TRadiobutton",
+            row,
+            value="m4b_only",
+            variable=self.v_format,
+            style="Bold.TRadiobutton",
             command=self._on_format_change,
         )
         self.rb_m4b_only.pack(side="left")
@@ -501,9 +510,7 @@ class BookvoiceApp(tk.Tk):
         ttk.Button(c_row, text="…", width=3, command=self._browse_cover).grid(
             row=0, column=1, padx=(4, 0)
         )
-        self.b_clear_cover = ttk.Button(
-            c_row, width=3, command=lambda: self.v_cover.set("")
-        )
+        self.b_clear_cover = ttk.Button(c_row, width=3, command=lambda: self.v_cover.set(""))
         self.b_clear_cover.grid(row=0, column=2, padx=(4, 0))
 
         self.l_parallel = ttk.Label(o)
@@ -1434,11 +1441,7 @@ class BookvoiceApp(tk.Tk):
             pct = st.fraction * 100.0
             self.pbar.configure(value=pct)
             elapsed = progress.format_duration(max(0.0, time.time() - st.started_at))
-            eta = (
-                progress.format_duration(st.eta_seconds)
-                if st.eta_seconds is not None
-                else "…"
-            )
+            eta = progress.format_duration(st.eta_seconds) if st.eta_seconds is not None else "…"
             self.v_status.set(
                 self._t(
                     "progress_line",
