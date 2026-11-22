@@ -69,9 +69,9 @@ class ProgressState:
         return dataclasses.asdict(self)
 
 
-def read_status(path: Path = DEFAULT_STATUS_PATH) -> ProgressState | None:
+def read_status(path: Path | None = None) -> ProgressState | None:
     """Read the last saved conversion status, or ``None`` if unavailable."""
-    resolved = path.expanduser().resolve()
+    resolved = (DEFAULT_STATUS_PATH if path is None else path).expanduser().resolve()
     if not resolved.exists():
         return None
     try:
