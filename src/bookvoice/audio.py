@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -25,16 +26,24 @@ def require_ffmpeg() -> None:
 
 
 def _run(cmd: Sequence[str | Path]) -> str:
-    proc = subprocess.run(
-        [str(c) for c in cmd], capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    proc = subprocess.run([str(c) for c in cmd], **kwargs)  # type: ignore[call-overload]
     if proc.returncode != 0:
-        raise FFmpegError(f"{Path(str(cmd[0])).name} failed: {proc.stderr.strip()}")
+        detail = proc.stderr.strip() or f"exit code {proc.returncode}"
+        raise FFmpegError(f"{Path(str(cmd[0])).name} failed: {detail}")
     return proc.stdout
 
 
 def run_ffmpeg(*args: str | Path) -> None:
-    _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *args])
+    _run(["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error", *args])
 
 
 def probe_duration(path: Path) -> float:

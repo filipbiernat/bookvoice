@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -51,13 +52,16 @@ def mobi_to_epub(src: str | Path, dst: str | Path | None = None) -> Path:
 
     exe = find_ebook_convert()
     log.info("Converting %s -> %s via Calibre...", src_path.name, dst_path.name)
-    proc = subprocess.run(
-        [str(exe), str(src_path), str(dst_path)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    proc = subprocess.run([str(exe), str(src_path), str(dst_path)], **kwargs)  # type: ignore[call-overload]
     if proc.returncode != 0 or not dst_path.is_file():
         detail = (proc.stderr or proc.stdout).strip().splitlines()
         msg = detail[-1] if detail else f"exit code {proc.returncode}"
