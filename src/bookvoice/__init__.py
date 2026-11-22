@@ -1,3 +1,3 @@
 """Convert EPUB, MOBI, AZW and AZW3 e-books into chaptered audiobooks using Edge neural TTS."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"

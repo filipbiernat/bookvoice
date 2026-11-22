@@ -10,10 +10,11 @@ import os
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import __version__, audio, doctor, mobi, pipeline, queue, tts
+from . import __version__, audio, doctor, mobi, pipeline, progress, queue, tts
 from .epub import Book, Chapter, Cover, EpubError, parse_epub
 from .text import DEFAULT_HEADING_PATTERN, parse_selection, safe_filename
 
@@ -235,6 +236,23 @@ def build_parser() -> argparse.ArgumentParser:
         "doctor", help="check Python, FFmpeg and optional Calibre dependencies"
     )
     doc.set_defaults(handler=cmd_doctor)
+
+    st = commands.add_parser("status", help="show live conversion progress, ETA and queue status")
+    st.add_argument("--watch", action="store_true", help="refresh continuously until Ctrl+C")
+    st.add_argument(
+        "--interval",
+        type=float,
+        default=3.0,
+        help="refresh interval in seconds for --watch (default: 3)",
+    )
+    st.add_argument(
+        "--queue",
+        type=Path,
+        default=queue.DEFAULT_QUEUE_PATH,
+        metavar="FILE",
+        help=f"queue state file (default: {queue.DEFAULT_QUEUE_PATH})",
+    )
+    st.set_defaults(handler=cmd_status)
     return parser
 
 
@@ -340,16 +358,31 @@ def cmd_convert(args: argparse.Namespace) -> None:
         keep_work=args.keep_work,
     )
     log.info("%s - %s: %d chapter(s), voice %s", book.author, book.title, len(chapters), opts.voice)
+    tracker = progress.ProgressTracker(
+        book_title=book.title,
+        book_author=book.author,
+        output_dir=out_dir.resolve(),
+        voice=opts.voice,
+        chapter_total=len(chapters),
+        chars_total=sum(c.char_count + len(c.spoken_title) for c in chapters),
+        quiet=getattr(args, "quiet", False),
+    )
 
     async def run() -> None:
         await _check_voice(opts.voice)
-        await pipeline.render_chapters(book, chapters, out_dir, opts)
+        await pipeline.render_chapters(book, chapters, out_dir, opts, tracker=tracker)
 
-    asyncio.run(run())
-    if not args.no_m4b:
-        pipeline.build_audiobook(
-            book, chapters, out_dir, bitrate=args.bitrate, keep_work=args.keep_work
-        )
+    try:
+        asyncio.run(run())
+        if not args.no_m4b:
+            tracker.set_packaging()
+            pipeline.build_audiobook(
+                book, chapters, out_dir, bitrate=args.bitrate, keep_work=args.keep_work
+            )
+    except BaseException:
+        tracker.finish(failed=True)
+        raise
+    tracker.finish()
 
 
 def cmd_m4b(args: argparse.Namespace) -> None:
@@ -533,6 +566,20 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
             if check.required:
                 missing_required = True
     return 1 if missing_required else 0
+
+
+def cmd_status(args: argparse.Namespace) -> None:
+    q = queue.BookQueue(args.queue)
+    if not args.watch:
+        print(progress.format_status_report(progress.read_status(), q))
+        return
+    interval = max(0.5, args.interval)
+    while True:
+        if sys.stdout.isatty():
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.flush()
+        print(progress.format_status_report(progress.read_status(), q))
+        time.sleep(interval)
 
 
 # ---------------------------------------------------------------------------

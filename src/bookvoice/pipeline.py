@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import audio
 from .epub import Book, Chapter
+from .progress import ProgressTracker
 from .tagging import tag_mp3
 from .text import chunk_paragraphs, safe_filename
 from .tts import synthesize_all
@@ -63,12 +64,22 @@ def _write_cover(book: Book, work_dir: Path) -> Path | None:
 
 
 async def render_chapter(
-    book: Book, chapter: Chapter, out_dir: Path, work_dir: Path, opts: ConvertOptions
+    book: Book,
+    chapter: Chapter,
+    out_dir: Path,
+    work_dir: Path,
+    opts: ConvertOptions,
+    *,
+    tracker: ProgressTracker | None = None,
+    position: int | None = None,
 ) -> Path:
     """Synthesise one chapter into a tagged MP3 in ``out_dir`` (skipped if it exists)."""
     dst = out_dir / chapter_filename(book, chapter)
     label = f"[{chapter.index:0{_index_width(book)}d}]"
+    pos = chapter.index if position is None else position
     if dst.exists():
+        if tracker is not None:
+            tracker.skip_chapter(pos, chapter.title, chapter.char_count)
         log.info("%s already done: %s", label, dst.name)
         return dst
 
@@ -77,9 +88,17 @@ async def render_chapter(
     texts = [chapter.spoken_title, *chunk_paragraphs(chapter.paragraphs, opts.chunk_chars)]
     parts = [chapter_dir / f"{i:04d}.mp3" for i in range(len(texts))]
     log.info("%s %s: %d chars, %d chunks", label, chapter.title, chapter.char_count, len(texts))
+    if tracker is not None:
+        tracker.start_chapter(pos, chapter.title, len(texts))
     await synthesize_all(
-        zip(texts, parts, strict=True), voice=opts.voice, rate=opts.rate, parallel=opts.parallel
+        zip(texts, parts, strict=True),
+        voice=opts.voice,
+        rate=opts.rate,
+        parallel=opts.parallel,
+        on_done=(lambda text, _dst: tracker.advance_chunk(len(text))) if tracker else None,
     )
+    if tracker is not None:
+        tracker.finish_chapter()
 
     pause_title = audio.make_silence(work_dir / "pause_title.mp3", opts.pause_after_title)
     pause_chunk = audio.make_silence(work_dir / "pause_chunk.mp3", opts.pause_between_chunks)
@@ -112,12 +131,20 @@ async def render_chapter(
 
 
 async def render_chapters(
-    book: Book, chapters: Sequence[Chapter], out_dir: Path, opts: ConvertOptions
+    book: Book,
+    chapters: Sequence[Chapter],
+    out_dir: Path,
+    opts: ConvertOptions,
+    *,
+    tracker: ProgressTracker | None = None,
 ) -> list[Path]:
     """Render chapters one after another (chunks within a chapter run in parallel)."""
     work_dir = out_dir / WORK_DIR_NAME
     work_dir.mkdir(parents=True, exist_ok=True)
-    paths = [await render_chapter(book, c, out_dir, work_dir, opts) for c in chapters]
+    paths = [
+        await render_chapter(book, c, out_dir, work_dir, opts, tracker=tracker, position=pos)
+        for pos, c in enumerate(chapters, 1)
+    ]
     if not opts.keep_work:
         shutil.rmtree(work_dir, ignore_errors=True)
     return paths

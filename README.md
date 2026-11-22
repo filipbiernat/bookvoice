@@ -24,6 +24,8 @@ neural voices. **bookvoice** reads the book's chapters, synthesises them with
   stopped.
 - Persistent **conversion queue** (`bookvoice queue`) — add books or Calibre
   folders anytime, even while a worker is already converting another book.
+- Live **progress bar & ETA** per chunk plus `bookvoice status [--watch]` for
+  monitoring background or queued runs from any terminal.
 - EBU R128 loudness normalisation for consistent volume.
 - Voice comparison mode to pick the voice you like before converting a whole book.
 - Includes an AI Agent Skill (`.agents/skills/bookvoice/SKILL.md`) for guided
@@ -102,6 +104,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `sample`    | Read a short excerpt with several voices to compare them.          |
 | `mobi2epub` | Convert a `.mobi`/`.azw`/`.azw3` file to `.epub` via Calibre.      |
 | `queue`     | Manage and run a persistent queue (`add`/`list`/`remove`/`clear`/`retry`/`run`). |
+| `status`    | Show live progress bar, ETA and queue status (`--watch` to auto-refresh).        |
 | `doctor`    | Check Python, FFmpeg and optional Calibre dependencies.            |
 
 ### Conversion queue
@@ -171,6 +174,7 @@ flowchart LR
 | `bookvoice.epub`     | EPUB parsing (metadata, cover, chapters, TOC).      |
 | `bookvoice.mobi`     | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
 | `bookvoice.queue`    | Persistent conversion queue and worker tracking.    |
+| `bookvoice.progress` | Live progress bar, ETA and `status.json` tracking.  |
 | `bookvoice.doctor`   | Environment and dependency checks (`doctor`).       |
 | `bookvoice.text`     | Text normalisation, chunking, titles, file names.   |
 | `bookvoice.tts`      | Edge TTS synthesis with retries and voice listing.  |

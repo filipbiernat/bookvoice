@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import edge_tts
@@ -77,7 +77,12 @@ async def synthesize(
 
 
 async def synthesize_all(
-    jobs: Iterable[tuple[str, Path]], *, voice: str, rate: str = "+0%", parallel: int = 3
+    jobs: Iterable[tuple[str, Path]],
+    *,
+    voice: str,
+    rate: str = "+0%",
+    parallel: int = 3,
+    on_done: Callable[[str, Path], None] | None = None,
 ) -> None:
     """Synthesise many ``(text, destination)`` pairs with bounded concurrency."""
     semaphore = asyncio.Semaphore(max(1, parallel))
@@ -85,5 +90,7 @@ async def synthesize_all(
     async def run(text: str, dst: Path) -> None:
         async with semaphore:
             await synthesize(text, dst, voice=voice, rate=rate)
+        if on_done is not None:
+            on_done(text, dst)
 
     await asyncio.gather(*(run(text, dst) for text, dst in jobs))

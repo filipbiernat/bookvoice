@@ -83,10 +83,10 @@ Ask the user to confirm or customize the following options (batch them into one 
    - **Full book** (all chapters)
    - **Skip front-matter** (e.g. `--only 2-<N>` if chapter 1 is a copyright/title page)
    - **Pilot / test run first** (e.g. `--only 1-2` or `--only 2-3`)
-4. **Execution mode** *(for full books or > 2 chapters — never block the chat with a long-running task)*:
-   - **Separate terminal window** *(recommended on desktop)*: opens a new console window showing live chapter progress and stays open on completion; the chat is immediately free.
-   - **Silent background (`--background`)**: runs detached with logs in `<output>/bookvoice.log`, returns PID immediately; works on all platforms and headless environments.
-   - **Wait in chat**: only for short pilots (e.g. `--only 1-2`).
+4. **Execution mode** *(for full books or > 2 chapters — give the user live visibility into progress & ETA without blocking the chat unnecessarily)*:
+   - **Run in user's own terminal (copy-paste 1-liner, recommended on Windows/desktop)**: prints a live progress bar + ETA updated after every chunk, survives closing the chat, and keeps the chat completely free (`0 tasks running`). Also supports `--background` + `bookvoice status --watch`.
+   - **Silent background (`--background`)**: runs detached with logs in `<output>/bookvoice.log` and live state in `~/.bookvoice/status.json`; monitor anytime with `bookvoice status --watch`. *(Note: some Windows agent shells terminate detached child processes via Job Objects when the command exits — if so, provide the ready-to-run command for the user's own terminal instead.)*
+   - **Wait in chat / agent background task**: best for short pilots (e.g. `--only 1-2`), or if the user explicitly wants the agent to run and monitor it.
 5. **Audio settings** (present defaults, let user override if desired):
    - **Speaking rate**: `+0%` (normal), or e.g. `-10%`, `+10%`, `+15%` (`--rate`)
    - **Bitrate**: `64k` (good speech quality & compact size), or `96k` / `128k` (`--bitrate`)
@@ -139,6 +139,7 @@ When the user wants to convert multiple books sequentially or add a book to run 
 - If no worker is running yet, pass `--background` to `queue add` (or start `bookvoice queue run` in a separate terminal window / with `--background`).
 - Check progress anytime with `bookvoice queue list` (and `~/.bookvoice/queue.log`), retry failures with `bookvoice queue retry`, or clean up finished entries with `bookvoice queue clear`.
 
-### 7. Verify Output
-- For short synchronous runs: inspect the output directory, verify the `.m4b` duration and chapter count with `ffprobe`, and report the result.
-- For fire-and-forget / queue runs: report the launch details (window / PID, output directory, log path) and end the turn cleanly. When the user later asks for status, run `bookvoice queue list`, check the tail of `<output>/bookvoice.log` (or `~/.bookvoice/queue.log`), or count `.mp3` files in `<output>`.
+### 7. Monitor & Verify Output
+- **Live status anytime:** run `bookvoice status` (shows progress bar, `%`, current chapter/chunk, elapsed time, ETA, and the queue). Tell the user they can also run `bookvoice status --watch` in any terminal for a live auto-refreshing dashboard.
+- **For short synchronous runs:** inspect the output directory, verify the `.m4b` duration and chapter count with `ffprobe`, and report the result.
+- **For detached / user-terminal / queue runs:** report the launch details (command, output directory, `bookvoice status --watch`) and end the turn cleanly.
