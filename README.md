@@ -106,6 +106,22 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `queue`     | Manage and run a persistent queue (`add`/`list`/`remove`/`clear`/`retry`/`run`). |
 | `status`    | Show live progress bar, ETA and queue status (`--watch` to auto-refresh).        |
 | `doctor`    | Check Python, FFmpeg and optional Calibre dependencies.            |
+| `gui`       | Launch the desktop graphical interface (`bookvoice-gui` without console).        |
+
+### Desktop GUI
+
+Launch the built-in `tkinter` desktop interface (zero extra dependencies, English by default with a persisted Polish language switch):
+
+```bash
+bookvoice gui                  # or 'bookvoice-gui' (no console window on Windows)
+bookvoice gui book.epub        # open and inspect a book immediately
+bookvoice gui --create-shortcut  # create a Windows desktop shortcut (or run scripts/create_shortcut.py)
+```
+
+The GUI provides three tabs:
+- **Convert**: inspect book metadata and chapters, pick chapters interactively, load & sample Edge TTS voices, configure format (`MP3 + M4B`, `MP3 only`, or `Rebuild M4B`), audio settings, live progress bar with ETA, safe Stop/Resume, and collapsible details log.
+- **Queue & Status**: monitor live conversion status (`status.json`, including CLI/background runs) and manage the persistent conversion queue (`~/.bookvoice/queue.json`).
+- **Tools & Doctor**: standalone `MOBI/AZW3 → EPUB` converter, environment diagnostics (`doctor`), and Windows desktop shortcut creator.
 
 ### Conversion queue
 

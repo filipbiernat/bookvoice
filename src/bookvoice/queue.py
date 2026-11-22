@@ -196,21 +196,27 @@ class BookQueue:
         self.pid_path.unlink(missing_ok=True)
         return None
 
+    def recover_stale(self) -> int:
+        """Reset items stuck in ``running`` back to ``pending`` when no worker is alive."""
+        if self.worker_pid() is not None:
+            return 0
+        data = self._load_raw()
+        recovered = 0
+        for raw in data["items"]:
+            if raw.get("status") == "running":
+                raw["status"] = "pending"
+                recovered += 1
+        if recovered:
+            self._save_raw(data)
+        return recovered
+
     def claim_worker(self) -> None:
         active = self.worker_pid()
         if active is not None and active != os.getpid():
             raise QueueError(f"queue worker is already running (PID {active})")
+        self.recover_stale()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
-        # Recover any item left in 'running' after a crash or hard kill.
-        data = self._load_raw()
-        changed = False
-        for raw in data["items"]:
-            if raw.get("status") == "running":
-                raw["status"] = "pending"
-                changed = True
-        if changed:
-            self._save_raw(data)
 
     def release_worker(self) -> None:
         try:

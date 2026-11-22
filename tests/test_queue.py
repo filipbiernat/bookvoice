@@ -119,3 +119,16 @@ def test_run_queue_recovers_stale_running_item(tmp_path: Path) -> None:
     assert (ok, failed) == (1, 0)
     assert seen == [item.id]
     assert q.items()[0].status == "done"
+
+
+def test_recover_stale_resets_running_without_worker(tmp_path: Path) -> None:
+    book = tmp_path / "stuck.epub"
+    book.write_bytes(b"x")
+    q = BookQueue(tmp_path / "queue.json")
+    item = q.add(book)
+    q.update(item.id, status="running")
+
+    assert q.next_pending() is None
+    assert q.recover_stale() == 1
+    assert q.next_pending() is not None
+    assert q.items()[0].status == "pending"

@@ -29,6 +29,9 @@ dev = ["pytest>=8", "ruff>=0.6"]
 [project.scripts]
 bookvoice = "bookvoice.cli:main"
 
+[project.gui-scripts]
+bookvoice-gui = "bookvoice.gui:main"
+
 [project.urls]
 Homepage = "https://github.com/filipbiernat/bookvoice"
 Issues = "https://github.com/filipbiernat/bookvoice/issues"

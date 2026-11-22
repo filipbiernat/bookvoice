@@ -237,11 +237,13 @@ def format_status_report(
         lines.append("Current conversion: none")
     else:
         alive = _pid_alive(state.pid)
+        active = state.state in ("running", "packaging") and alive
         label = state.state
         if state.state in ("running", "packaging") and not alive:
             label = "stopped (process exited)"
         pct = state.fraction * 100
-        elapsed = format_duration(max(0.0, current_time - state.started_at))
+        end_time = current_time if active else (state.updated_at or current_time)
+        elapsed = format_duration(max(0.0, end_time - state.started_at))
         eta = (
             format_duration(state.eta_seconds)
             if state.eta_seconds is not None and state.state == "running" and alive
