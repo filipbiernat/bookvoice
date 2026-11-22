@@ -69,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--only", type=_selection, metavar="LIST", help="chapters to process, e.g. '1,3-5'"
     )
     output.add_argument("--bitrate", default="64k", help="audio bitrate (default: 64k)")
-    output.add_argument("--cover", type=Path, help="cover image overriding the one in the EPUB")
+    output.add_argument("--cover", type=Path, help="cover image overriding the one in the book")
     output.add_argument(
         "--keep-work", action="store_true", help="keep intermediate files in '<output>/.work'"
     )
@@ -79,8 +79,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="bookvoice",
-        description="Convert EPUB e-books into chaptered audiobooks (MP3 + M4B) "
-        "using Microsoft Edge neural text-to-speech.",
+        description="Convert EPUB, MOBI, AZW and AZW3 e-books into chaptered audiobooks "
+        "(MP3 + M4B) using Microsoft Edge neural text-to-speech.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     verbosity = parser.add_mutually_exclusive_group()

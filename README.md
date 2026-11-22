@@ -4,8 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
-Turn EPUB e-books into audiobooks with natural-sounding neural voices.
-**bookvoice** reads the book's chapters, synthesises them with
+Turn EPUB, MOBI, AZW and AZW3 e-books into audiobooks with natural-sounding
+neural voices. **bookvoice** reads the book's chapters, synthesises them with
 [Microsoft Edge text-to-speech](https://github.com/rany2/edge-tts) and produces:
 
 - one tagged **MP3 per chapter** (title, author, track number, cover art), and
@@ -53,6 +53,9 @@ pip install git+https://github.com/filipbiernat/bookvoice.git
 
 ## Usage
 
+All commands accept `.epub` as well as `.mobi`, `.azw`, `.azw3` and `.prc`
+(Kindle files are converted to EPUB automatically when Calibre is installed).
+
 ```bash
 # 1. Inspect the book: metadata, detected chapters and their sizes
 bookvoice info book.epub
@@ -66,6 +69,10 @@ bookvoice convert book.epub --only 1-2
 
 # 4. ... then convert the whole book (already finished chapters are skipped)
 bookvoice convert book.epub --voice pl-PL-MarekNeural --rate +10%
+
+# Works with Kindle files too (or convert standalone with mobi2epub)
+bookvoice convert book.mobi
+bookvoice mobi2epub book.mobi -o book.epub
 ```
 
 The result lands in `./<Author> - <Title>/`:
@@ -89,7 +96,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `info`      | Show book metadata, the default voice and the chapter list.        |
 | `convert`   | Synthesise chapters to MP3 and package them as M4B.                |
 | `m4b`       | (Re)build the M4B from already synthesised chapter MP3s.           |
-| `voices`    | List available voices, e.g. `bookvoice voices pl`.            |
+| `voices`    | List available voices, e.g. `bookvoice voices pl`.                 |
 | `sample`    | Read a short excerpt with several voices to compare them.          |
 | `mobi2epub` | Convert a `.mobi`/`.azw`/`.azw3` file to `.epub` via Calibre.      |
 
@@ -102,7 +109,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `--voice NAME`          | by book language        | Voice short name from `voices`.                               |
 | `--rate PCT`            | `+0%`                   | Speaking rate, e.g. `-10%`, `+20%`.                           |
 | `--bitrate RATE`        | `64k`                   | Audio bitrate of MP3 and M4B.                                 |
-| `--cover IMAGE`         | from EPUB               | Override the cover (`.jpg`/`.png`).                           |
+| `--cover IMAGE`         | from book               | Override the cover (`.jpg`/`.png`).                           |
 | `--parallel N`          | `3`                     | Concurrent TTS requests.                                      |
 | `--chunk-chars N`       | `2500`                  | Maximum characters per TTS request.                           |
 | `--no-normalize`        | –                       | Skip loudness normalisation.                                  |
@@ -126,23 +133,32 @@ words; pass your own regex with two groups (label, subtitle) via
 
 ```mermaid
 flowchart LR
-    A[EPUB] -->|spine, TOC, metadata| B[Chapters]
+    M["MOBI / AZW / AZW3"] -.->|Calibre| A[EPUB]
+    A -->|spine, TOC, metadata| B[Chapters]
     B -->|sentence-aware chunks| C[Edge TTS]
     C -->|parallel MP3 parts| D[ffmpeg concat + loudnorm]
     D -->|ID3 tags + cover| E[Chapter MP3s]
     E -->|chapter markers| F[M4B]
 ```
 
-| Module                     | Responsibility                                      |
-| -------------------------- | --------------------------------------------------- |
-| `bookvoice.epub`      | EPUB parsing (metadata, cover, chapters, TOC).      |
-| `bookvoice.mobi`      | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
-| `bookvoice.text`      | Text normalisation, chunking, titles, file names.   |
-| `bookvoice.tts`       | Edge TTS synthesis with retries and voice listing.  |
-| `bookvoice.audio`     | FFmpeg wrappers: concat, silence, M4B packaging.    |
-| `bookvoice.tagging`   | ID3 tags for chapter MP3s.                          |
-| `bookvoice.pipeline`  | Orchestration of the whole conversion.              |
-| `bookvoice.cli`       | Command-line interface.                             |
+| Module               | Responsibility                                      |
+| -------------------- | --------------------------------------------------- |
+| `bookvoice.epub`     | EPUB parsing (metadata, cover, chapters, TOC).      |
+| `bookvoice.mobi`     | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
+| `bookvoice.text`     | Text normalisation, chunking, titles, file names.   |
+| `bookvoice.tts`      | Edge TTS synthesis with retries and voice listing.  |
+| `bookvoice.audio`    | FFmpeg wrappers: concat, silence, M4B packaging.    |
+| `bookvoice.tagging`  | ID3 tags for chapter MP3s.                          |
+| `bookvoice.pipeline` | Orchestration of the whole conversion.              |
+| `bookvoice.cli`      | Command-line interface.                             |
+
+## AI Agent Skill
+
+The repository includes an Agent Skill at
+[`.agents/skills/bookvoice/SKILL.md`](.agents/skills/bookvoice/SKILL.md) that
+guides you interactively through converting a book — asking about format
+(MP3 / M4B), language & voice, voice sampling, chapter selection, speaking rate
+and bitrate before starting the conversion.
 
 ## Development
 
