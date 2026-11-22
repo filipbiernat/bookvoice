@@ -16,12 +16,16 @@ Turn EPUB e-books into audiobooks with natural-sounding neural voices.
 
 - Works with any standard EPUB 2/3 – chapters follow the spine (reading order),
   titles come from headings or the table of contents.
+- Supports Kindle formats (`.mobi`, `.azw`, `.azw3`, `.prc`) automatically via
+  Calibre's `ebook-convert`, plus a standalone `mobi2epub` command.
 - Picks a default voice from the book's language (400+ voices, 100+ languages).
 - Smart text chunking at sentence boundaries, natural pauses between parts.
 - Parallel synthesis with automatic retries; **interrupted runs resume** where they
   stopped.
 - EBU R128 loudness normalisation for consistent volume.
 - Voice comparison mode to pick the voice you like before converting a whole book.
+- Includes an AI Agent Skill (`.agents/skills/epub2audiobook/SKILL.md`) for guided
+  interactive audiobook generation.
 - No API key needed.
 
 ## Requirements
@@ -31,6 +35,8 @@ Turn EPUB e-books into audiobooks with natural-sounding neural voices.
   - Windows: `winget install Gyan.FFmpeg`
   - macOS: `brew install ffmpeg`
   - Debian/Ubuntu: `sudo apt install ffmpeg`
+- *(Optional)* [Calibre](https://calibre-ebook.com) (`ebook-convert`) – only needed
+  for `.mobi` / `.azw` / `.azw3` input files
 - An internet connection (speech is synthesised by Microsoft's online service)
 
 ## Installation
@@ -78,13 +84,14 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 
 ### Commands
 
-| Command   | Description                                                        |
-| --------- | ------------------------------------------------------------------ |
-| `info`    | Show book metadata, the default voice and the chapter list.        |
-| `convert` | Synthesise chapters to MP3 and package them as M4B.                |
-| `m4b`     | (Re)build the M4B from already synthesised chapter MP3s.           |
-| `voices`  | List available voices, e.g. `epub2audiobook voices pl`.            |
-| `sample`  | Read a short excerpt with several voices to compare them.          |
+| Command     | Description                                                        |
+| ----------- | ------------------------------------------------------------------ |
+| `info`      | Show book metadata, the default voice and the chapter list.        |
+| `convert`   | Synthesise chapters to MP3 and package them as M4B.                |
+| `m4b`       | (Re)build the M4B from already synthesised chapter MP3s.           |
+| `voices`    | List available voices, e.g. `epub2audiobook voices pl`.            |
+| `sample`    | Read a short excerpt with several voices to compare them.          |
+| `mobi2epub` | Convert a `.mobi`/`.azw`/`.azw3` file to `.epub` via Calibre.      |
 
 ### Common options
 
@@ -129,6 +136,7 @@ flowchart LR
 | Module                     | Responsibility                                      |
 | -------------------------- | --------------------------------------------------- |
 | `epub2audiobook.epub`      | EPUB parsing (metadata, cover, chapters, TOC).      |
+| `epub2audiobook.mobi`      | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
 | `epub2audiobook.text`      | Text normalisation, chunking, titles, file names.   |
 | `epub2audiobook.tts`       | Edge TTS synthesis with retries and voice listing.  |
 | `epub2audiobook.audio`     | FFmpeg wrappers: concat, silence, M4B packaging.    |

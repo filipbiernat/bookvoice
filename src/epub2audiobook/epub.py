@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import posixpath
 import re
+import tempfile
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from pathlib import Path
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
 
+from .mobi import MobiConvertError, is_mobi, mobi_to_epub
 from .text import DEFAULT_HEADING_PATTERN, format_heading, normalize_whitespace, spoken_title
 
 _CONTAINER_PATH = "META-INF/container.xml"
@@ -258,8 +260,20 @@ def _toc_labels(
 def parse_epub(
     path: str | Path, heading_pattern: re.Pattern[str] | None = DEFAULT_HEADING_PATTERN
 ) -> Book:
-    """Read metadata, cover and readable chapters (in spine order) from an EPUB file."""
+    """Read metadata, cover and readable chapters (in spine order) from an EPUB or MOBI file.
+
+    Kindle formats (``.mobi``, ``.azw``, ``.azw3``, ``.prc``) are automatically
+    converted to a temporary EPUB via Calibre's ``ebook-convert``.
+    """
     path = Path(path)
+    if is_mobi(path):
+        with tempfile.TemporaryDirectory(prefix="epub2audiobook_") as tmp:
+            try:
+                converted = mobi_to_epub(path, Path(tmp) / f"{path.stem}.epub")
+            except MobiConvertError as exc:
+                raise EpubError(str(exc)) from exc
+            return parse_epub(converted, heading_pattern)
+
     try:
         archive = zipfile.ZipFile(path)
     except (OSError, zipfile.BadZipFile) as exc:

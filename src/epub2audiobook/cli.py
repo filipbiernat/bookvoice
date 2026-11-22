@@ -11,7 +11,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import __version__, audio, pipeline, tts
+from . import __version__, audio, mobi, pipeline, tts
 from .epub import Book, Chapter, Cover, EpubError, parse_epub
 from .text import DEFAULT_HEADING_PATTERN, parse_selection, safe_filename
 
@@ -51,7 +51,7 @@ def _positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     book = argparse.ArgumentParser(add_help=False)
-    book.add_argument("epub", type=Path, help="path to the .epub file")
+    book.add_argument("epub", type=Path, help="path to the .epub (or .mobi/.azw/.azw3) file")
     book.add_argument(
         "--heading-pattern",
         type=_heading_pattern,
@@ -144,6 +144,16 @@ def build_parser() -> argparse.ArgumentParser:
         "-o", "--output", type=Path, default=Path("voice-samples"), help="output directory"
     )
     sample.set_defaults(handler=cmd_sample)
+
+    mobi2epub = commands.add_parser(
+        "mobi2epub",
+        help="convert a MOBI/AZW/AZW3 file to EPUB using Calibre",
+    )
+    mobi2epub.add_argument("input", type=Path, help="path to the .mobi/.azw/.azw3 file")
+    mobi2epub.add_argument(
+        "-o", "--output", type=Path, help="output .epub path (default: next to input)"
+    )
+    mobi2epub.set_defaults(handler=cmd_mobi2epub)
     return parser
 
 
@@ -279,6 +289,11 @@ def cmd_sample(args: argparse.Namespace) -> None:
     asyncio.run(run())
 
 
+def cmd_mobi2epub(args: argparse.Namespace) -> None:
+    dst = mobi.mobi_to_epub(args.input, args.output)
+    log.info("Converted: %s", dst)
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -295,6 +310,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
     except (
         EpubError,
+        mobi.MobiConvertError,
         audio.FFmpegError,
         tts.TTSError,
         pipeline.MissingChaptersError,
