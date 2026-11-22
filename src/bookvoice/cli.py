@@ -220,7 +220,7 @@ def cmd_info(args: argparse.Namespace) -> None:
 
 
 def _spawn_background(argv: Sequence[str], out_dir: Path) -> tuple[int, Path]:
-    """Re-launch ``bookvoice`` detached from the terminal, logging to ``<out_dir>/bookvoice.log``."""
+    """Re-launch ``bookvoice`` detached, writing logs to ``<out_dir>/bookvoice.log``."""
     child_args = [arg for arg in argv if arg != "--background"]
     cmd = [sys.executable, "-m", "bookvoice", *child_args]
     out_dir.mkdir(parents=True, exist_ok=True)
