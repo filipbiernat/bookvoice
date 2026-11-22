@@ -18,11 +18,22 @@ concise questions with sensible defaults before starting long conversions.
 
 Before running any conversion, check the environment and help the user install anything missing:
 
-1. **Locate `bookvoice`:**
-   - Check if `bookvoice` is on `PATH`, or in a local `.venv` (`.venv/Scripts/bookvoice` on Windows, `.venv/bin/bookvoice` on macOS/Linux).
+1. **Locate `bookvoice` (and resolve its path):**
+   - Prefer `bookvoice` on global `PATH` (check with `which bookvoice` / `Get-Command bookvoice`).
+   - If it is only installed inside a local `.venv` (`.venv/Scripts/bookvoice.exe` on Windows, `.venv/bin/bookvoice` on macOS/Linux), resolve its **full absolute path** and offer to install it globally via `pipx` so plain `bookvoice` works from any terminal.
    - If `bookvoice` is **not installed**, ask the user for permission and offer to install it:
      - Preferred: `pipx install git+https://github.com/filipbiernat/bookvoice.git`
      - Fallback: `pip install git+https://github.com/filipbiernat/bookvoice.git` (or `pip install -e .` if inside a cloned repo).
+
+## Shell & Copy-Paste Command Rules
+
+Whenever you show a command for the user to run in their own terminal (CMD, PowerShell, bash/zsh):
+- **Never use relative paths** like `.\.venv\Scripts\bookvoice.exe` or `./.venv/bin/bookvoice` — users often open a fresh terminal in `C:\Users\<user>`, `C:\Windows\system32`, or `~`, where relative paths fail immediately.
+- Use plain `bookvoice ...` if it is on `PATH`, otherwise use the **full absolute path** to the executable (e.g. `C:\path\to\.venv\Scripts\bookvoice.exe status --watch`) and full absolute paths for input/output files.
+- Keep copy-paste commands **shell-neutral** so they work in CMD, PowerShell, and bash alike:
+  - Avoid PowerShell-only syntax (`$env:...`, `.\`, `& '...'`) unless explicitly labelled as PowerShell-only.
+  - Quote file arguments with double quotes `"..."` (works in CMD, PowerShell, and bash).
+  - Do not wrap a space-free executable path in quotes (in PowerShell `"C:\foo\bookvoice.exe" status` is a syntax error without `&`, whereas `C:\foo\bookvoice.exe status` works in both CMD and PowerShell).
 2. **Run environment diagnostics:**
    ```bash
    bookvoice doctor
@@ -109,23 +120,21 @@ Base arguments:
 convert "<book_path>" --voice <voice> --rate <rate> --bitrate <bitrate> [--only <selection>] [--no-m4b] [--no-normalize] [-o "<output_dir>"] [--cover "<cover_path>"]
 ```
 
-Choose the launch mode based on the user's preference (for full books, **always** use fire-and-forget so no persistent background task blocks the chat):
+Choose the launch mode based on the user's preference:
 
-- **Separate terminal window (Windows PowerShell):**
-  ```powershell
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$env:PYTHONIOENCODING='utf-8'; & '<bookvoice_exe>' convert '<book_path>' ..."
+- **User's own terminal (recommended for full books on Windows/desktop):**
+  Provide a single shell-neutral copy-paste command using `bookvoice` (or its full absolute path if only in `.venv`) and full absolute paths for `<book_path>` / `<output_dir>`:
+  ```text
+  <bookvoice_cmd> convert "<book_path>" --voice <voice> ... -o "<output_dir>"
   ```
-- **Separate terminal window (macOS):**
-  ```bash
-  osascript -e 'tell application "Terminal" to do script "bookvoice convert \"<book_path>\" ..."'
-  ```
-- **Silent background (Windows / macOS / Linux):**
+  (Add `--background` if the user wants it detached without keeping the terminal open; they can monitor it anytime with `<bookvoice_cmd> status --watch`.)
+- **Silent background from agent shell (POSIX / environments without Job Object teardown):**
   ```bash
   bookvoice convert "<book_path>" ... --background
   ```
-  Prints the PID, output directory, and `<output>/bookvoice.log` path, then exits immediately.
+  Prints the PID, output directory, and `<output>/bookvoice.log` path, then exits immediately. *(On Windows agent shells that kill child processes via Job Objects when a command finishes, do not rely on `--background` or `Start-Process` from inside the agent — give the user the copy-paste command above or run as an agent background task instead.)*
 - **Short pilot (wait in chat):**
-  Run `bookvoice convert ...` directly (on Windows PowerShell, set `$env:PYTHONIOENCODING='utf-8'`).
+  Run `bookvoice convert ...` directly (in agent PowerShell calls, set `$env:PYTHONIOENCODING='utf-8'`).
 
 Remind the user that **interrupted runs resume automatically** — running the exact same command skips already-finished chapters.
 
