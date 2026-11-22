@@ -13,7 +13,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import __version__, audio, mobi, pipeline, queue, tts
+from . import __version__, audio, doctor, mobi, pipeline, queue, tts
 from .epub import Book, Chapter, Cover, EpubError, parse_epub
 from .text import DEFAULT_HEADING_PATTERN, parse_selection, safe_filename
 
@@ -230,6 +230,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the queue worker detached in the background",
     )
     q_run.set_defaults(handler=cmd_queue_run)
+
+    doc = commands.add_parser(
+        "doctor", help="check Python, FFmpeg and optional Calibre dependencies"
+    )
+    doc.set_defaults(handler=cmd_doctor)
     return parser
 
 
@@ -516,6 +521,20 @@ def cmd_queue_run(args: argparse.Namespace) -> None:
     log.info("Queue finished: %d done, %d failed.", ok, failed)
 
 
+def cmd_doctor(_args: argparse.Namespace) -> int:
+    print(f"bookvoice {__version__} environment check:")
+    missing_required = False
+    for check in doctor.run_checks():
+        tag = "[OK]" if check.ok else ("[MISSING]" if check.required else "[OPTIONAL]")
+        print(f"  {tag:<10} {check.name:<10} {check.detail}")
+        if not check.ok:
+            if check.install_hint:
+                print(f"             Install: {check.install_hint}")
+            if check.required:
+                missing_required = True
+    return 1 if missing_required else 0
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -528,7 +547,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.verbose:
         logging.getLogger("asyncio").setLevel(logging.WARNING)
     try:
-        args.handler(args)
+        result = args.handler(args)
+        if isinstance(result, int):
+            return result
     except KeyboardInterrupt:
         print("\nInterrupted - run the same command again to resume.", file=sys.stderr)
         return 130

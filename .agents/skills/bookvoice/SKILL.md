@@ -14,12 +14,41 @@ Guide the user interactively through converting an e-book into a high-quality
 audiobook using `bookvoice`. Converse in the user's language and ask clear,
 concise questions with sensible defaults before starting long conversions.
 
-## Prerequisites Check
+## Prerequisites & Assisted Installation
 
-Before running commands, locate the `bookvoice` executable:
-- Check if `bookvoice` is on `PATH`, or in a local `.venv` (e.g. `.venv/Scripts/bookvoice` on Windows or `.venv/bin/bookvoice` on macOS/Linux).
-- Verify `ffmpeg` and `ffprobe` are available on `PATH`.
-- If the source book is `.mobi`, `.azw`, `.azw3`, or `.prc`, verify Calibre's `ebook-convert` is installed (`bookvoice` invokes it automatically).
+Before running any conversion, check the environment and help the user install anything missing:
+
+1. **Locate `bookvoice`:**
+   - Check if `bookvoice` is on `PATH`, or in a local `.venv` (`.venv/Scripts/bookvoice` on Windows, `.venv/bin/bookvoice` on macOS/Linux).
+   - If `bookvoice` is **not installed**, ask the user for permission and offer to install it:
+     - Preferred: `pipx install git+https://github.com/filipbiernat/bookvoice.git`
+     - Fallback: `pip install git+https://github.com/filipbiernat/bookvoice.git` (or `pip install -e .` if inside a cloned repo).
+2. **Run environment diagnostics:**
+   ```bash
+   bookvoice doctor
+   ```
+   This checks **Python 3.10+**, **FFmpeg** (`ffmpeg` + `ffprobe`, required), and **Calibre** (`ebook-convert`, optional — only required for `.mobi`/`.azw`/`.azw3`/`.prc`).
+3. **Handle missing dependencies gracefully:**
+   - **If `ffmpeg` / `ffprobe` is `[MISSING]` (required):**
+     - Explain briefly why FFmpeg is required (merging audio chunks, loudness normalisation, M4B packaging).
+     - Ask the user for confirmation before installing, then run the matching command:
+       - Windows: `winget install --id Gyan.FFmpeg -e`
+       - macOS: `brew install ffmpeg`
+       - Linux (Debian/Ubuntu): `sudo apt update && sudo apt install -y ffmpeg` (or `dnf`/`pacman` for Fedora/Arch)
+     - If they prefer manual installation or the package manager fails, share `https://ffmpeg.org/download.html` and pause until installed.
+   - **If `Calibre` is `[OPTIONAL]` (not found):**
+     - For `.epub` files: do **not** block — just continue normally.
+     - For `.mobi`, `.azw`, `.azw3`, or `.prc` files: explain that Calibre's `ebook-convert` is needed to convert Kindle formats to EPUB, ask for confirmation, and offer to install:
+       - Windows: `winget install --id calibre.calibre -e`
+       - macOS: `brew install --cask calibre`
+       - Linux (Debian/Ubuntu): `sudo apt update && sudo apt install -y calibre`
+     - Fallback manual link: `https://calibre-ebook.com/download`.
+4. **Verify after installation:**
+   - On Windows PowerShell, refresh `PATH` in the current session after `winget` installs:
+     ```powershell
+     $env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+     ```
+   - Re-run `bookvoice doctor` to confirm all required dependencies report `[OK]` before proceeding.
 
 ## Step-by-Step Workflow
 

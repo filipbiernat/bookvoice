@@ -102,6 +102,7 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `sample`    | Read a short excerpt with several voices to compare them.          |
 | `mobi2epub` | Convert a `.mobi`/`.azw`/`.azw3` file to `.epub` via Calibre.      |
 | `queue`     | Manage and run a persistent queue (`add`/`list`/`remove`/`clear`/`retry`/`run`). |
+| `doctor`    | Check Python, FFmpeg and optional Calibre dependencies.            |
 
 ### Conversion queue
 
@@ -170,6 +171,7 @@ flowchart LR
 | `bookvoice.epub`     | EPUB parsing (metadata, cover, chapters, TOC).      |
 | `bookvoice.mobi`     | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
 | `bookvoice.queue`    | Persistent conversion queue and worker tracking.    |
+| `bookvoice.doctor`   | Environment and dependency checks (`doctor`).       |
 | `bookvoice.text`     | Text normalisation, chunking, titles, file names.   |
 | `bookvoice.tts`      | Edge TTS synthesis with retries and voice listing.  |
 | `bookvoice.audio`    | FFmpeg wrappers: concat, silence, M4B packaging.    |
