@@ -202,6 +202,15 @@ class BookQueue:
             raise QueueError(f"queue worker is already running (PID {active})")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+        # Recover any item left in 'running' after a crash or hard kill.
+        data = self._load_raw()
+        changed = False
+        for raw in data["items"]:
+            if raw.get("status") == "running":
+                raw["status"] = "pending"
+                changed = True
+        if changed:
+            self._save_raw(data)
 
     def release_worker(self) -> None:
         try:

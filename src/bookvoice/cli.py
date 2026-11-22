@@ -253,6 +253,17 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"queue state file (default: {queue.DEFAULT_QUEUE_PATH})",
     )
     st.set_defaults(handler=cmd_status)
+
+    gui_cmd = commands.add_parser("gui", help="launch the desktop graphical interface")
+    gui_cmd.add_argument(
+        "book", nargs="?", type=Path, help="optional e-book file to open immediately"
+    )
+    gui_cmd.add_argument(
+        "--create-shortcut",
+        action="store_true",
+        help="create a Windows desktop shortcut for bookvoice GUI and exit",
+    )
+    gui_cmd.set_defaults(handler=cmd_gui)
     return parser
 
 
@@ -547,7 +558,7 @@ def cmd_queue_run(args: argparse.Namespace) -> None:
         print(f"Started queue worker in background (PID {pid}).")
         print(f"Log: {log_path}")
         return
-    if q.next_pending() is None:
+    if q.next_pending() is None and not any(i.status == "running" for i in q.items()):
         log.info("Queue is empty (no pending items).")
         return
     ok, failed = queue.run_queue(q, _convert_queue_item)
@@ -580,6 +591,18 @@ def cmd_status(args: argparse.Namespace) -> None:
             sys.stdout.flush()
         print(progress.format_status_report(progress.read_status(), q))
         time.sleep(interval)
+
+
+def cmd_gui(args: argparse.Namespace) -> int:
+    if args.create_shortcut:
+        from . import gui_shortcut
+
+        shortcut = gui_shortcut.create_desktop_shortcut()
+        print(f"Created desktop shortcut: {shortcut}")
+        return 0
+    from . import gui
+
+    return gui.launch(initial_book=str(args.book) if args.book else "")
 
 
 # ---------------------------------------------------------------------------

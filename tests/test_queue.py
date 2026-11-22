@@ -105,3 +105,17 @@ def test_cli_queue_workflow(
 
     assert cli.main(["queue", "--queue", str(qfile), "remove", "1"]) == 0
     assert "Removed #1" in capsys.readouterr().out
+
+
+def test_run_queue_recovers_stale_running_item(tmp_path: Path) -> None:
+    book = tmp_path / "interrupted.epub"
+    book.write_bytes(b"x")
+    q = BookQueue(tmp_path / "queue.json")
+    item = q.add(book)
+    q.update(item.id, status="running")  # simulates hard kill / server restart
+
+    seen: list[int] = []
+    ok, failed = run_queue(q, lambda it: seen.append(it.id))
+    assert (ok, failed) == (1, 0)
+    assert seen == [item.id]
+    assert q.items()[0].status == "done"
