@@ -22,6 +22,8 @@ neural voices. **bookvoice** reads the book's chapters, synthesises them with
 - Smart text chunking at sentence boundaries, natural pauses between parts.
 - Parallel synthesis with automatic retries; **interrupted runs resume** where they
   stopped.
+- Persistent **conversion queue** (`bookvoice queue`) — add books or Calibre
+  folders anytime, even while a worker is already converting another book.
 - EBU R128 loudness normalisation for consistent volume.
 - Voice comparison mode to pick the voice you like before converting a whole book.
 - Includes an AI Agent Skill (`.agents/skills/bookvoice/SKILL.md`) for guided
@@ -99,6 +101,27 @@ When `--only` is used, the M4B contains just the selected chapters and is named
 | `voices`    | List available voices, e.g. `bookvoice voices pl`.                 |
 | `sample`    | Read a short excerpt with several voices to compare them.          |
 | `mobi2epub` | Convert a `.mobi`/`.azw`/`.azw3` file to `.epub` via Calibre.      |
+| `queue`     | Manage and run a persistent queue (`add`/`list`/`remove`/`clear`/`retry`/`run`). |
+
+### Conversion queue
+
+Convert a whole series unattended — books added while the worker is running are
+picked up automatically as soon as the current book finishes:
+
+```bash
+# Add files or whole Calibre book folders (prefers .epub, falls back to .azw3/.mobi)
+bookvoice queue add "Book 1/" "Book 2.epub" --voice pl-PL-MarekNeural
+
+# Start the worker in the background (or add --background directly to 'queue add')
+bookvoice queue run --background
+
+# Inspect status, retry failed books, or clear finished entries
+bookvoice queue list
+bookvoice queue retry
+bookvoice queue clear
+```
+
+Queue state is stored in `~/.bookvoice/queue.json` (override with `--queue FILE`).
 
 ### Common options
 
@@ -146,6 +169,7 @@ flowchart LR
 | -------------------- | --------------------------------------------------- |
 | `bookvoice.epub`     | EPUB parsing (metadata, cover, chapters, TOC).      |
 | `bookvoice.mobi`     | MOBI/AZW/AZW3 -> EPUB conversion via Calibre.       |
+| `bookvoice.queue`    | Persistent conversion queue and worker tracking.    |
 | `bookvoice.text`     | Text normalisation, chunking, titles, file names.   |
 | `bookvoice.tts`      | Edge TTS synthesis with retries and voice listing.  |
 | `bookvoice.audio`    | FFmpeg wrappers: concat, silence, M4B packaging.    |

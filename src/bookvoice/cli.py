@@ -13,7 +13,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import __version__, audio, mobi, pipeline, tts
+from . import __version__, audio, mobi, pipeline, queue, tts
 from .epub import Book, Chapter, Cover, EpubError, parse_epub
 from .text import DEFAULT_HEADING_PATTERN, parse_selection, safe_filename
 
@@ -161,6 +161,75 @@ def build_parser() -> argparse.ArgumentParser:
         "-o", "--output", type=Path, help="output .epub path (default: next to input)"
     )
     mobi2epub.set_defaults(handler=cmd_mobi2epub)
+
+    q_parser = commands.add_parser(
+        "queue",
+        help="manage and run a persistent conversion queue",
+        description="Manage a persistent queue of e-books to convert sequentially. "
+        "Books added while a worker is running are picked up automatically.",
+    )
+    q_parser.add_argument(
+        "--queue",
+        type=Path,
+        default=queue.DEFAULT_QUEUE_PATH,
+        metavar="FILE",
+        help=f"queue state file (default: {queue.DEFAULT_QUEUE_PATH})",
+    )
+    q_cmds = q_parser.add_subparsers(dest="queue_command", required=True, metavar="ACTION")
+
+    q_add = q_cmds.add_parser(
+        "add",
+        parents=[output, voice],
+        help="add one or more book files or folders to the queue",
+    )
+    q_add.add_argument(
+        "paths", nargs="+", type=Path, help="e-book file(s) or folder(s) containing an e-book"
+    )
+    q_add.add_argument("--voice", help="Edge TTS voice (default: chosen from book language)")
+    q_add.add_argument(
+        "--chunk-chars", type=_positive_int, default=2500, help="max characters per TTS request"
+    )
+    q_add.add_argument(
+        "--parallel", type=_positive_int, default=3, help="concurrent TTS requests (default: 3)"
+    )
+    q_add.add_argument(
+        "--no-normalize", action="store_true", help="skip EBU R128 loudness normalisation"
+    )
+    q_add.add_argument("--no-m4b", action="store_true", help="only produce chapter MP3s")
+    q_add.add_argument(
+        "--heading-pattern",
+        default=None,
+        metavar="REGEX",
+        help="custom heading regex ('' disables)",
+    )
+    q_add.add_argument(
+        "--background",
+        action="store_true",
+        help="start the queue worker in the background if not already running",
+    )
+    q_add.set_defaults(handler=cmd_queue_add)
+
+    q_list = q_cmds.add_parser("list", help="show queued, running, finished and failed books")
+    q_list.set_defaults(handler=cmd_queue_list)
+
+    q_rm = q_cmds.add_parser("remove", help="remove an item from the queue by id")
+    q_rm.add_argument("id", type=int, help="item id from 'bookvoice queue list'")
+    q_rm.set_defaults(handler=cmd_queue_remove)
+
+    q_clear = q_cmds.add_parser("clear", help="clear finished and failed items (or --all)")
+    q_clear.add_argument("--all", action="store_true", help="also clear pending items")
+    q_clear.set_defaults(handler=cmd_queue_clear)
+
+    q_retry = q_cmds.add_parser("retry", help="re-queue all failed items as pending")
+    q_retry.set_defaults(handler=cmd_queue_retry)
+
+    q_run = q_cmds.add_parser("run", help="convert all pending books in the queue sequentially")
+    q_run.add_argument(
+        "--background",
+        action="store_true",
+        help="run the queue worker detached in the background",
+    )
+    q_run.set_defaults(handler=cmd_queue_run)
     return parser
 
 
@@ -219,12 +288,14 @@ def cmd_info(args: argparse.Namespace) -> None:
         print(f"{chapter.index:>{width}}  {chapter.char_count:>8,}  {chapter.title}")
 
 
-def _spawn_background(argv: Sequence[str], out_dir: Path) -> tuple[int, Path]:
-    """Re-launch ``bookvoice`` detached, writing logs to ``<out_dir>/bookvoice.log``."""
+def _spawn_background(
+    argv: Sequence[str], log_dir: Path, log_name: str = "bookvoice.log"
+) -> tuple[int, Path]:
+    """Re-launch ``bookvoice`` detached, writing logs to ``<log_dir>/<log_name>``."""
     child_args = [arg for arg in argv if arg != "--background"]
     cmd = [sys.executable, "-m", "bookvoice", *child_args]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    log_path = out_dir / "bookvoice.log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / log_name
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
     kwargs: dict[str, object] = {
         "stdin": subprocess.DEVNULL,
@@ -331,6 +402,120 @@ def cmd_mobi2epub(args: argparse.Namespace) -> None:
     log.info("Converted: %s", dst)
 
 
+def _convert_queue_item(item: queue.QueueItem) -> None:
+    pattern = (
+        DEFAULT_HEADING_PATTERN
+        if item.heading_pattern is None
+        else _heading_pattern(item.heading_pattern)
+    )
+    only = parse_selection(item.only) if item.only else None
+    ns = argparse.Namespace(
+        epub=Path(item.source),
+        heading_pattern=pattern,
+        output=Path(item.output) if item.output else None,
+        only=only,
+        voice=item.voice,
+        rate=item.rate,
+        bitrate=item.bitrate,
+        chunk_chars=item.chunk_chars,
+        parallel=item.parallel,
+        no_normalize=item.no_normalize,
+        no_m4b=item.no_m4b,
+        cover=Path(item.cover) if item.cover else None,
+        keep_work=item.keep_work,
+        background=False,
+    )
+    cmd_convert(ns)
+
+
+def cmd_queue_add(args: argparse.Namespace) -> None:
+    q = queue.BookQueue(args.queue)
+    only_spec = ",".join(map(str, sorted(args.only))) if args.only else None
+    output_str = str(args.output.resolve()) if args.output else None
+    cover_str = str(args.cover.resolve()) if args.cover else None
+    if args.heading_pattern is not None:
+        _heading_pattern(args.heading_pattern)
+    for path in args.paths:
+        item = q.add(
+            path,
+            output=output_str,
+            voice=args.voice,
+            rate=args.rate,
+            bitrate=args.bitrate,
+            only=only_spec,
+            chunk_chars=args.chunk_chars,
+            parallel=args.parallel,
+            no_normalize=args.no_normalize,
+            no_m4b=args.no_m4b,
+            cover=cover_str,
+            keep_work=args.keep_work,
+            heading_pattern=args.heading_pattern,
+        )
+        print(f"Queued #{item.id}: {Path(item.source).name}")
+
+    active = q.worker_pid()
+    if active is not None:
+        print(
+            f"Worker is already running (PID {active}) - it will pick up new items automatically."
+        )
+    elif args.background:
+        audio.require_ffmpeg()
+        pid, log_path = _spawn_background(
+            ["queue", "--queue", str(q.path), "run"], q.path.parent, "queue.log"
+        )
+        print(f"Started queue worker in background (PID {pid}).")
+        print(f"Log: {log_path}")
+
+
+def cmd_queue_list(args: argparse.Namespace) -> None:
+    q = queue.BookQueue(args.queue)
+    active = q.worker_pid()
+    status_line = f"running (PID {active})" if active else "idle"
+    print(f"Queue:  {q.path}")
+    print(f"Worker: {status_line}\n")
+    items = q.items()
+    if not items:
+        print("(empty)")
+        return
+    print(f"{'#':>3}  {'status':<8}  book")
+    for item in items:
+        extra = f"  [{item.error}]" if item.error else ""
+        print(f"{item.id:>3}  {item.status:<8}  {Path(item.source).name}{extra}")
+
+
+def cmd_queue_remove(args: argparse.Namespace) -> None:
+    removed = queue.BookQueue(args.queue).remove(args.id)
+    print(f"Removed #{removed.id}: {Path(removed.source).name}")
+
+
+def cmd_queue_clear(args: argparse.Namespace) -> None:
+    count = queue.BookQueue(args.queue).clear(all_items=args.all)
+    print(f"Cleared {count} item(s).")
+
+
+def cmd_queue_retry(args: argparse.Namespace) -> None:
+    count = queue.BookQueue(args.queue).retry_failed()
+    print(f"Re-queued {count} failed item(s).")
+
+
+def cmd_queue_run(args: argparse.Namespace) -> None:
+    audio.require_ffmpeg()
+    q = queue.BookQueue(args.queue)
+    if args.background:
+        active = q.worker_pid()
+        if active is not None:
+            raise queue.QueueError(f"queue worker is already running (PID {active})")
+        pid, log_path = _spawn_background(args._argv, q.path.parent, "queue.log")
+        print(f"Started queue worker in background (PID {pid}).")
+        print(f"Log: {log_path}")
+        return
+    if q.next_pending() is None:
+        log.info("Queue is empty (no pending items).")
+        return
+    ok, failed = queue.run_queue(q, _convert_queue_item)
+    log.info("Queue finished: %d done, %d failed.", ok, failed)
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -350,6 +535,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         EpubError,
         mobi.MobiConvertError,
+        queue.QueueError,
         audio.FFmpegError,
         tts.TTSError,
         pipeline.MissingChaptersError,

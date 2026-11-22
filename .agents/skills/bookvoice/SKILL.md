@@ -2,9 +2,10 @@
 name: bookvoice
 description: >-
   Interactive guided workflow for converting EPUB, MOBI, AZW, or AZW3 e-books into
-  chaptered audiobooks (MP3 and/or M4B) using the bookvoice CLI. Activate this
-  skill whenever the user wants to generate an audiobook from an e-book, compare TTS
-  voices, or convert MOBI to EPUB for audiobook generation.
+  chaptered audiobooks (MP3 and/or M4B) using the bookvoice CLI, including managing
+  a persistent conversion queue. Activate this skill whenever the user wants to
+  generate an audiobook from an e-book, queue multiple books, compare TTS voices,
+  or convert MOBI to EPUB for audiobook generation.
 ---
 
 # Audiobook Generation Assistant (`bookvoice`)
@@ -99,6 +100,16 @@ Choose the launch mode based on the user's preference (for full books, **always*
 
 Remind the user that **interrupted runs resume automatically** — running the exact same command skips already-finished chapters.
 
-### 6. Verify Output
+### 6. Conversion Queue (Multiple Books / Series)
+When the user wants to convert multiple books sequentially or add a book to run after an ongoing conversion:
+- Add one or more book files or Calibre folders (automatically picks `.epub`, then `.azw3`/`.mobi`):
+  ```bash
+  bookvoice queue add "<book_or_folder>" [convert options...] [--background]
+  ```
+- If a queue worker is already running, newly added books are picked up automatically when the current book finishes.
+- If no worker is running yet, pass `--background` to `queue add` (or start `bookvoice queue run` in a separate terminal window / with `--background`).
+- Check progress anytime with `bookvoice queue list` (and `~/.bookvoice/queue.log`), retry failures with `bookvoice queue retry`, or clean up finished entries with `bookvoice queue clear`.
+
+### 7. Verify Output
 - For short synchronous runs: inspect the output directory, verify the `.m4b` duration and chapter count with `ffprobe`, and report the result.
-- For fire-and-forget runs: report the launch details (window / PID, output directory, log path) and end the turn cleanly. When the user later asks for status, check the tail of `<output>/bookvoice.log` or count `.mp3` files in `<output>`.
+- For fire-and-forget / queue runs: report the launch details (window / PID, output directory, log path) and end the turn cleanly. When the user later asks for status, run `bookvoice queue list`, check the tail of `<output>/bookvoice.log` (or `~/.bookvoice/queue.log`), or count `.mp3` files in `<output>`.
