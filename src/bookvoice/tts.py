@@ -47,19 +47,27 @@ async def list_voices(locale: str | None = None) -> list[dict]:
 
 
 async def synthesize(
-    text: str, dst: Path, *, voice: str, rate: str = "+0%", attempts: int = 7
+    text: str,
+    dst: Path,
+    *,
+    voice: str,
+    rate: str = "+0%",
+    attempts: int = 7,
+    timeout: float = 120.0,
 ) -> None:
     """Synthesise ``text`` to the MP3 file ``dst``; existing non-empty files are kept.
 
-    Transient failures (network errors, throttling, empty responses) are retried
-    with a growing back-off.
+    Transient failures (network errors, stalled sockets, throttling, empty responses)
+    are retried with a growing back-off.
     """
     if dst.exists() and dst.stat().st_size > 0:
         return
     tmp = dst.with_name(dst.name + ".part")
     for attempt in range(1, attempts + 1):
         try:
-            await edge_tts.Communicate(text, voice, rate=rate).save(str(tmp))
+            await asyncio.wait_for(
+                edge_tts.Communicate(text, voice, rate=rate).save(str(tmp)), timeout=timeout
+            )
             if not tmp.exists() or tmp.stat().st_size == 0:
                 raise TTSError("received empty audio")
             tmp.replace(dst)
@@ -67,6 +75,7 @@ async def synthesize(
         except ValueError:
             raise  # invalid voice/rate syntax: retrying will not help
         except Exception as exc:
+            tmp.unlink(missing_ok=True)
             if attempt == attempts:
                 raise TTSError(f"failed to synthesise {dst.name}: {exc!r}") from exc
             delay = min(60, 3 * attempt**2)

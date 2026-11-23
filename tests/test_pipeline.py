@@ -91,6 +91,36 @@ def test_cli_convert_background(
     assert "bookvoice.log" in out
 
 
+def test_tts_synthesize_times_out_and_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    calls = 0
+
+    class HangingOnce:
+        def __init__(self, _text: str, _voice: str, rate: str = "+0%") -> None:
+            pass
+
+        async def save(self, path: str) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                await asyncio.Event().wait()
+            Path(path).write_bytes(b"mp3data")
+
+    async def fast_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("bookvoice.tts.edge_tts.Communicate", HangingOnce)
+    monkeypatch.setattr("bookvoice.tts.asyncio.sleep", fast_sleep)
+
+    dst = tmp_path / "chunk.mp3"
+    asyncio.run(tts.synthesize("hello", dst, voice="pl-PL-MarekNeural", attempts=2, timeout=0.05))
+    assert calls == 2
+    assert dst.read_bytes() == b"mp3data"
+
+
 def test_render_chapter_skips_spoken_title_when_unannounced(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
